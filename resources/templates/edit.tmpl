@@ -1,0 +1,32 @@
+{{define "content"}}
+<h1>{{.Title}}</h1>
+<form method="POST" action="/edit" class="editor">
+  <label>
+    Slug
+    <input
+      type="text"
+      name="slug"
+      value="{{.Slug}}"
+      placeholder="например: guides/intro"
+      {{if not .IsNew}}readonly{{end}}
+      required
+      autofocus
+    >
+  </label>
+
+  <label>
+    Содержимое (Markdown)
+    <textarea
+      name="content"
+      rows="24"
+      spellcheck="false"
+      required
+    >{{.Content}}</textarea>
+  </label>
+
+  <div class="actions">
+    <button type="submit">Сохранить</button>
+    <a href="{{if .Slug}}/{{.Slug}}{{else}}/{{end}}">Отмена</a>
+  </div>
+</form>
+{{end}}

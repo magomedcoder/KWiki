@@ -1,16 +1,35 @@
-{{define "title"}}{{.Title}}{{end}}
 {{define "content"}}
-<h1>{{.Title}}</h1>
-<article>{{.Body}}</article>
+<article>
+  <header class="page-header">
+    <h1>{{.Title}}</h1>
+    <div class="page-actions">
+      {{if .Missing}}
+        <a class="btn" href="/edit?slug={{.Slug}}">Создать страницу</a>
+      {{else}}
+        <a class="btn" href="/edit?slug={{.Slug}}">Редактировать</a>
+      {{end}}
+    </div>
+  </header>
 
-{{if .Revisions}}
-<div class="revisions">
-    <strong>История (последние {{len .Revisions}}):</strong>
-    <ul>
-        {{range .Revisions}}
-        <li><code>{{.Hash}}</code> - {{.Message}} ({{.CreatedAt.Format "2006-01-02 15:04"}})</li>
-        {{end}}
-    </ul>
-</div>
-{{end}}
+  {{if .Missing}}
+    <p>Страницы <code>{{.Slug}}</code> ещё нет.</p>
+  {{else}}
+    <div class="content">{{.Body}}</div>
+
+    {{if .Revisions}}
+      <section class="history">
+        <h2>История</h2>
+        <ul>
+          {{range .Revisions}}
+            <li>
+              <code>{{.Hash}}</code>
+              <span>{{.Message}}</span>
+              <time>{{.CreatedAt.Format "02.01.2006 15:04"}}</time>
+            </li>
+          {{end}}
+        </ul>
+      </section>
+    {{end}}
+  {{end}}
+</article>
 {{end}}

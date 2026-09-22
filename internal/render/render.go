@@ -11,6 +11,7 @@ import (
 var (
 	indexTmpl *template.Template
 	pageTmpl  *template.Template
+	editTmpl  *template.Template
 
 	reTags   = regexp.MustCompile(`>\s+<`)
 	reSpaces = regexp.MustCompile(`\s{2,}`)
@@ -19,6 +20,7 @@ var (
 func LoadTemplates(dir string) {
 	indexTmpl = template.Must(template.ParseFiles(dir+"/layout.tmpl", dir+"/index.tmpl"))
 	pageTmpl = template.Must(template.ParseFiles(dir+"/layout.tmpl", dir+"/page.tmpl"))
+	editTmpl = template.Must(template.ParseFiles(dir+"/layout.tmpl", dir+"/edit.tmpl"))
 }
 
 func minifyHTML(s string) string {
@@ -45,4 +47,8 @@ func RenderIndex(w http.ResponseWriter, data any) {
 
 func RenderPage(w http.ResponseWriter, data any) {
 	exec(w, pageTmpl, data)
+}
+
+func RenderEdit(w http.ResponseWriter, data any) {
+	exec(w, editTmpl, data)
 }

@@ -26,9 +26,17 @@ type PageData struct {
 	Slug      string
 	Body      any // template.HTML
 	Revisions []Revision
+	Missing   bool
 }
 
 type IndexData struct {
 	Title string
 	Pages []PageIndex
+}
+
+type EditData struct {
+	Title   string
+	Slug    string
+	Content string
+	IsNew   bool
 }

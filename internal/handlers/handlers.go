@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"log"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/magomedcoder/kwiki/internal/db"
 	"github.com/magomedcoder/kwiki/internal/gitstore"
 	"github.com/magomedcoder/kwiki/internal/markdown"
 	"github.com/magomedcoder/kwiki/internal/models"
 	"github.com/magomedcoder/kwiki/internal/render"
-	"io"
-	"net/http"
-	"path/filepath"
-	"strings"
 
 	"gorm.io/gorm"
 )
@@ -58,7 +60,12 @@ func (h *Handler) Page(w http.ResponseWriter, r *http.Request) {
 
 	content, err := h.store.ReadFile(path)
 	if err != nil {
-		http.NotFound(w, r)
+		render.RenderPage(w, models.PageData{
+			Title:   strings.ReplaceAll(filepath.Base(slug), "-", " "),
+			Slug:    slug,
+			Body:    "",
+			Missing: true,
+		})
 		return
 	}
 
@@ -80,8 +87,54 @@ func (h *Handler) Page(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		h.editForm(w, r)
+	case http.MethodPost:
+		h.savePage(w, r)
+	default:
 		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) editForm(w http.ResponseWriter, r *http.Request) {
+	slug := strings.Trim(r.URL.Query().Get("slug"), "/")
+	if strings.Contains(slug, "..") {
+		http.Error(w, "некорректный слаг", http.StatusBadRequest)
+		return
+	}
+
+	var content string
+	isNew := true
+
+	if slug != "" {
+		path := slug
+		if !strings.HasSuffix(path, ".md") {
+			path += ".md"
+		}
+
+		if data, err := h.store.ReadFile(path); err == nil {
+			content = string(data)
+			isNew = false
+		}
+	}
+
+	title := "Новая страница"
+	if !isNew {
+		title = "Редактирование: " + slug
+	}
+
+	render.RenderEdit(w, models.EditData{
+		Title:   title,
+		Slug:    slug,
+		Content: content,
+		IsNew:   isNew,
+	})
+}
+
+func (h *Handler) savePage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -91,21 +144,27 @@ func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	content := []byte(r.FormValue("content"))
 
 	path := slug
 	if !strings.HasSuffix(path, ".md") {
 		path += ".md"
 	}
 
-	msg := "edit: " + slug
+	_, readErr := h.store.ReadFile(path)
+	action := "edit"
+	if readErr != nil {
+		action = "create"
+	}
+	msg := action + ": " + slug
+
 	if err := h.store.WriteFile(path, content, msg); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if err := db.SyncIndex(h.db, h.store); err != nil {
+		log.Printf("sync index: %v", err)
 	}
 
 	http.Redirect(w, r, "/"+slug, http.StatusSeeOther)

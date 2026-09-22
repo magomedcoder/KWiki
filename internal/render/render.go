@@ -17,8 +17,8 @@ var (
 )
 
 func LoadTemplates(dir string) {
-	indexTmpl = template.Must(template.ParseFiles(dir+"/layout.html", dir+"/index.tmpl"))
-	pageTmpl = template.Must(template.ParseFiles(dir+"/layout.html", dir+"/page.html"))
+	indexTmpl = template.Must(template.ParseFiles(dir+"/layout.tmpl", dir+"/index.tmpl"))
+	pageTmpl = template.Must(template.ParseFiles(dir+"/layout.tmpl", dir+"/page.tmpl"))
 }
 
 func minifyHTML(s string) string {
@@ -30,7 +30,7 @@ func minifyHTML(s string) string {
 
 func exec(w http.ResponseWriter, t *template.Template, data any) {
 	var buf bytes.Buffer
-	if err := t.ExecuteTemplate(&buf, "layout.html", data); err != nil {
+	if err := t.ExecuteTemplate(&buf, "layout.tmpl", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("template error: %v", err)
 		return

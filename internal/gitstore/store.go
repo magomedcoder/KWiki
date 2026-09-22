@@ -1,13 +1,15 @@
 package gitstore
 
 import (
-	"github.com/go-git/go-git/v6"
+	"errors" // добавляем импорт errors для errors.Is
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing" // импорт пакета plumbing
 	"github.com/go-git/go-git/v6/plumbing/object"
 )
 
@@ -23,16 +25,67 @@ type File struct {
 }
 
 func NewLocal(path string) (*Store, error) {
-	repo, err := git.PlainOpen(path)
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 
-	abs, _ := filepath.Abs(path)
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return nil, err
+	}
+
+	repo, err := git.PlainOpen(abs)
+	if err == git.ErrRepositoryNotExists {
+		repo, err = git.PlainInit(abs, false)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := ensureInitialCommit(repo, abs); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
 	return &Store{
 		repo: repo,
 		root: abs,
 	}, nil
+}
+
+func ensureInitialCommit(repo *git.Repository, root string) error {
+	if _, err := repo.Head(); err == nil {
+		return nil
+	} else if !errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return err
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	keep := filepath.Join(root, ".gitkeep")
+	if _, err := os.Stat(keep); os.IsNotExist(err) {
+		if err := os.WriteFile(keep, []byte{}, 0o644); err != nil {
+			return err
+		}
+
+		if _, err := wt.Add(".gitkeep"); err != nil {
+			return err
+		}
+	}
+
+	_, err = wt.Commit("initial commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "kwiki",
+			Email: "kwiki@localhost",
+			When:  time.Now(),
+		},
+	})
+
+	return err
 }
 
 func (s *Store) headTree() (*object.Tree, error) {

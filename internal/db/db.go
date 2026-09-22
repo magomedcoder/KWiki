@@ -3,6 +3,8 @@ package db
 import (
 	"github.com/magomedcoder/kwiki/internal/gitstore"
 	"github.com/magomedcoder/kwiki/internal/models"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +14,10 @@ import (
 )
 
 func Open(path string) (*gorm.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+
 	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
 	if err != nil {
 		return nil, err

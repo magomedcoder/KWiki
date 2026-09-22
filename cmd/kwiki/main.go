@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	repoPath := flag.String("repo", ".", "")
-	dbPath := flag.String("db", "wiki.db", "")
+	repoPath := flag.String("repo", "./data/wiki-content", "")
+	dbPath := flag.String("db", "./data/wiki.db", "")
 	addr := flag.String("addr", ":8000", "")
 	flag.Parse()
 
@@ -30,11 +30,12 @@ func main() {
 		log.Fatalf("sync: %v", err)
 	}
 
-	render.LoadTemplates("templates")
+	render.LoadTemplates("resources/templates")
 
 	h := handlers.New(store, database)
 	http.HandleFunc("/", h.Index)
 	http.HandleFunc("/edit", h.Edit)
 
+	log.Printf("KWiki запущен на %s (repo=%s, db=%s)", *addr, *repoPath, *dbPath)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

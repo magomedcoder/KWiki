@@ -1,0 +1,16 @@
+{{define "title"}}{{.Title}}{{end}}
+{{define "content"}}
+<h1>{{.Title}}</h1>
+<article>{{.Body}}</article>
+
+{{if .Revisions}}
+<div class="revisions">
+    <strong>История (последние {{len .Revisions}}):</strong>
+    <ul>
+        {{range .Revisions}}
+        <li><code>{{.Hash}}</code> - {{.Message}} ({{.CreatedAt.Format "2006-01-02 15:04"}})</li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+{{end}}

@@ -19,8 +19,6 @@ type Wiki interface {
 
 	ListBranches(ctx context.Context) ([]domain.Branch, error)
 
-	ListPages(ctx context.Context, branch string) ([]domain.Page, error)
-
 	ViewPage(ctx context.Context, branch, slug string) (usecase.PageView, error)
 
 	EditForm(ctx context.Context, branch, slug string) (usecase.EditForm, error)
@@ -73,15 +71,21 @@ type Handler struct {
 	auth       Auth
 	view       View
 	secure     bool
+	home       string
 	cookieName string
 }
 
-func New(wiki Wiki, auth Auth, view View, secure bool) *Handler {
+func New(wiki Wiki, auth Auth, view View, secure bool, home string) *Handler {
+	if home == "" {
+		home = domain.DefaultHome
+	}
+
 	return &Handler{
 		wiki:       wiki,
 		auth:       auth,
 		view:       view,
 		secure:     secure,
+		home:       home,
 		cookieName: cookieName(secure),
 	}
 }
@@ -111,6 +115,9 @@ func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if branchName == domain.DefaultBranch && strings.HasPrefix(r.URL.Path, "/b/") {
+		if slug == h.home {
+			slug = ""
+		}
 		http.Redirect(w, r, domain.PagePath(domain.DefaultBranch, slug), http.StatusMovedPermanently)
 		return
 	}
@@ -137,11 +144,20 @@ func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if slug == "" {
-		h.listBranch(w, r, branch)
-		return
+	home := slug == "" || slug == h.home
+	if slug == h.home {
+		target := domain.PagePath(branch.Name, "")
+		if r.URL.Path != target {
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			return
+		}
 	}
-	h.showPage(w, r, branch, slug)
+
+	if slug == "" {
+		slug = h.home
+	}
+
+	h.showPage(w, r, branch, slug, home)
 }
 
 func (h *Handler) publicCatalog(w http.ResponseWriter, r *http.Request) {
@@ -167,52 +183,7 @@ func (h *Handler) publicCatalog(w http.ResponseWriter, r *http.Request) {
 	}, usecase.Actor{})
 }
 
-func (h *Handler) listBranch(w http.ResponseWriter, r *http.Request, branch domain.Branch) {
-	pages, err := h.wiki.ListPages(r.Context(), branch.Name)
-	if err != nil {
-		log.Printf("список страниц: %v", err)
-		http.Error(w, "не удалось загрузить страницы", http.StatusInternalServerError)
-		return
-	}
-
-	actor := actorFrom(r)
-	branches, err := h.wiki.VisibleBranches(r.Context(), actor.Email != "")
-	if err != nil {
-		log.Printf("список веток: %v", err)
-		http.Error(w, "не удалось загрузить ветки", http.StatusInternalServerError)
-		return
-	}
-
-	items := make([]usecase.PageItem, 0, len(pages))
-	for _, page := range pages {
-		items = append(items, usecase.PageItem{
-			Title: page.Title,
-			Href:  domain.PagePath(branch.Name, page.Slug),
-			Hash:  page.Hash,
-		})
-	}
-
-	title := branch.Name
-	if branch.Name == domain.DefaultBranch {
-		title = "Страницы"
-	}
-	indexable := branch.Public
-	markIndexable(w, indexable)
-	view := usecase.IndexView{
-		Title:     title,
-		Branch:    branch.Name,
-		Pages:     items,
-		Branches:  usecase.BranchLinks(branches, branch.Name),
-		Indexable: indexable,
-	}
-	if indexable {
-		view.Description = usecase.BranchDescription(branch)
-		view.Canonical = h.absolute(r, domain.PagePath(branch.Name, ""))
-	}
-	h.view.Index(w, view, actor)
-}
-
-func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain.Branch, slug string) {
+func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain.Branch, slug string, home bool) {
 	view, err := h.wiki.ViewPage(r.Context(), branch.Name, slug)
 	if errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrNotFound) {
 		markIndexable(w, false)
@@ -239,17 +210,30 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 		return
 	}
 
+	if home && !view.Missing {
+		if title := markdownTitle(view.Markdown); title != "" {
+			view.Title = title
+		}
+	}
+
 	indexable := branch.Public && !view.Missing
 	markIndexable(w, indexable)
+	path := domain.PagePath(branch.Name, view.Slug)
+	if home {
+		path = domain.PagePath(branch.Name, "")
+	}
+
 	screen := usecase.PageScreen{
 		PageView:  view,
 		EditHref:  domain.EditPath(branch.Name, view.Slug),
 		Indexable: indexable,
+		Home:      home,
 		Branches:  usecase.BranchLinks(branches, branch.Name),
 	}
 	if indexable {
-		screen.Canonical = h.absolute(r, domain.PagePath(branch.Name, view.Slug))
+		screen.Canonical = h.absolute(r, path)
 	}
+
 	h.view.Page(w, screen, actor)
 }
 

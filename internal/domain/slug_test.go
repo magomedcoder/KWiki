@@ -2,6 +2,17 @@ package domain
 
 import "testing"
 
+func TestHomeSlug(t *testing.T) {
+	slug, err := HomeSlug(" README.md ")
+	if err != nil || slug != "README" {
+		t.Fatalf("slug = %q, err = %v", slug, err)
+	}
+
+	if _, err := HomeSlug(""); err != ErrInvalidSlug {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestNormalizeSlug(t *testing.T) {
 	slug, err := NormalizeSlug("/guides/intro/")
 	if err != nil || slug != "guides/intro" {

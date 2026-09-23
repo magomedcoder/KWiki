@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/magomedcoder/kwiki/internal/domain"
+	"github.com/magomedcoder/kwiki/internal/usecase"
 )
 
 func splitWikiPath(path string) (branch, slug string, ok bool) {
@@ -94,6 +95,7 @@ func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "не удалось построить карту сайта", http.StatusInternalServerError)
 		return
 	}
+	entries = foldHome(entries, h.home)
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
@@ -115,6 +117,67 @@ func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
 	}
 	b.WriteString("</urlset>")
 	_, _ = w.Write([]byte(b.String()))
+}
+
+func foldHome(entries []usecase.SitemapEntry, home string) []usecase.SitemapEntry {
+	updated := map[string]time.Time{}
+	for _, entry := range entries {
+		root, ok := homeRoot(entry.Path, home)
+		if ok {
+			updated[root] = entry.Updated
+		}
+	}
+
+	out := make([]usecase.SitemapEntry, 0, len(entries))
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		if _, ok := homeRoot(entry.Path, home); ok {
+			continue
+		}
+
+		if when, ok := updated[entry.Path]; ok && entry.Updated.IsZero() {
+			entry.Updated = when
+		}
+
+		if seen[entry.Path] {
+			continue
+		}
+
+		seen[entry.Path] = true
+		out = append(out, entry)
+	}
+
+	return out
+}
+
+func homeRoot(path, home string) (string, bool) {
+	suffix := "/" + home
+	if path == suffix {
+		return "/", true
+	}
+
+	if !strings.HasSuffix(path, suffix) {
+		return "", false
+	}
+
+	root := strings.TrimSuffix(path, suffix)
+	name := strings.TrimPrefix(root, "/b/")
+	if root == "" || strings.Contains(name, "/") {
+		return "", false
+	}
+
+	return root, true
+}
+
+func markdownTitle(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		}
+	}
+
+	return ""
 }
 
 func xmlEscape(b *strings.Builder, value string) {

@@ -2,6 +2,18 @@ package domain
 
 import "strings"
 
+const DefaultHome = "README"
+
+func HomeSlug(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimSuffix(raw, ".md")
+	if raw == "" {
+		return "", ErrInvalidSlug
+	}
+
+	return NormalizeSlug(raw)
+}
+
 func NormalizeSlug(raw string) (string, error) {
 	slug := strings.Trim(raw, "/")
 	if slug == "" || strings.Contains(slug, "..") || strings.Contains(slug, `\`) {

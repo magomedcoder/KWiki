@@ -26,7 +26,7 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 		},
 	}
 	view := &stubView{}
-	h := New(&stubWiki{}, auth, view, true)
+	h := New(&stubWiki{}, auth, view, true, "README")
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := h.Protect(mux)
@@ -77,7 +77,7 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 func TestEditRequiresCSRF(t *testing.T) {
 	auth := &stubAuth{actor: usecase.Actor{Email: "admin@example.com", CSRF: "session-csrf"}}
 	wiki := &stubWiki{}
-	h := New(wiki, auth, &stubView{}, false)
+	h := New(wiki, auth, &stubView{}, false, "README")
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -137,10 +137,6 @@ func (stubWiki) VisibleBranches(_ context.Context, authenticated bool) ([]domain
 
 func (stubWiki) ListBranches(context.Context) ([]domain.Branch, error) {
 	return []domain.Branch{{Name: domain.DefaultBranch}, {Name: "docs", Public: true}}, nil
-}
-
-func (stubWiki) ListPages(context.Context, string) ([]domain.Page, error) {
-	return nil, nil
 }
 
 func (stubWiki) ViewPage(_ context.Context, branch, slug string) (usecase.PageView, error) {
@@ -245,7 +241,7 @@ func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
 
 func TestPublicBranchIsIndexed(t *testing.T) {
 	view := &stubView{}
-	h := New(&stubWiki{}, &stubAuth{}, view, true)
+	h := New(&stubWiki{}, &stubAuth{}, view, true, "README")
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -298,5 +294,40 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/main/intro", nil))
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/intro" {
 		t.Fatalf("redirect %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestBranchRootShowsHomeFile(t *testing.T) {
+	view := &stubView{}
+	h := New(&stubWiki{}, &stubAuth{}, view, true, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/b/docs", nil)
+	req.Host = "wiki.example"
+	h.Protect(mux).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !view.page.Home || view.page.Slug != "README" || view.page.Canonical != "https://wiki.example/b/docs" {
+		t.Fatalf("status %d page %+v", rec.Code, view.page)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/docs/README", nil))
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/b/docs" {
+		t.Fatalf("redirect %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestFoldHome(t *testing.T) {
+	updated := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
+	got := foldHome([]usecase.SitemapEntry{
+		{Path: "/"},
+		{Path: "/README", Updated: updated},
+		{Path: "/b/docs"},
+		{Path: "/b/docs/README", Updated: updated},
+		{Path: "/b/docs/guide"},
+	}, "README")
+	if len(got) != 3 || got[0].Path != "/" || !got[0].Updated.Equal(updated) || got[1].Path != "/b/docs" || got[2].Path != "/b/docs/guide" {
+		t.Fatalf("sitemap %+v", got)
 	}
 }

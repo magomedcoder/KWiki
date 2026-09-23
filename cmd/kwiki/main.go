@@ -12,6 +12,7 @@ import (
 	"github.com/magomedcoder/kwiki/internal/adapter/httpapi"
 	"github.com/magomedcoder/kwiki/internal/adapter/password"
 	"github.com/magomedcoder/kwiki/internal/adapter/sqlite"
+	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
 )
 
@@ -26,7 +27,13 @@ func main() {
 	addr := flag.String("addr", ":8000", "")
 	secure := flag.Bool("secure", false, "")
 	pepper := flag.String("pepper", "", "")
+	homeFlag := flag.String("home", "README.md", "")
 	flag.Parse()
+
+	home, err := domain.HomeSlug(*homeFlag)
+	if err != nil {
+		log.Fatalf("главная страница: %v", err)
+	}
 
 	paths := pathsFrom(*data)
 	content, err := git.NewLocal(paths.Repo)
@@ -68,7 +75,7 @@ func main() {
 		log.Fatalf("шаблоны: %v", err)
 	}
 
-	handler := httpapi.New(wiki, auth, views, *secure)
+	handler := httpapi.New(wiki, auth, views, *secure, home)
 	mux := http.NewServeMux()
 	handler.Register(mux)
 

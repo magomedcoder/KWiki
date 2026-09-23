@@ -1,29 +1,8 @@
 {{define "content"}}
-{{if .Catalog}}
 <h1>{{.Title}}</h1>
 <ul>
     {{range .Branches}}
     <li><a href="{{.Href}}">{{.Name}}</a></li>
     {{end}}
 </ul>
-{{else}}
-<h1>{{.Title}}</h1>
-{{if .Branches}}
-<nav class="branches">
-    {{range .Branches}}
-    {{if .Current}}<strong>{{.Name}}</strong>{{else}}<a href="{{.Href}}">{{.Name}}</a>{{end}}
-    {{if not .Public}}<small>приватная</small>{{end}}
-    {{end}}
-</nav>
-{{end}}
-{{if .Pages}}
-<ul>
-    {{range .Pages}}
-    <li><a href="{{.Href}}">{{.Title}}</a> <small>({{.Hash}})</small></li>
-    {{end}}
-</ul>
-{{else}}
-<p>В этой ветке пока нет страниц.</p>
-{{end}}
-{{end}}
 {{end}}

@@ -20,6 +20,7 @@ go build -o build/kwiki ./cmd/kwiki
 | `-addr`   | `:8000`      | адрес HTTP                                                      |
 | `-pepper` | пусто        | секрет хеша паролей, тот же, что при `user add` и `user passwd` |
 | `-secure` | выключен     | кука `Secure` и заголовок HSTS, нужен HTTPS                     |
+| `-home`   | `README.md`  | страница корня ветки                                            |
 
 ## Пользователи
 

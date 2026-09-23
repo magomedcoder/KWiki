@@ -32,12 +32,6 @@ type EditForm struct {
 	IsNew   bool
 }
 
-type PageItem struct {
-	Title string
-	Href  string
-	Hash  string
-}
-
 type BranchView struct {
 	Name    string
 	Public  bool
@@ -50,7 +44,6 @@ type IndexView struct {
 	Description string
 	Branch      string
 	Catalog     bool
-	Pages       []PageItem
 	Branches    []BranchView
 	Canonical   string
 	Indexable   bool
@@ -61,6 +54,7 @@ type PageScreen struct {
 	EditHref  string
 	Canonical string
 	Indexable bool
+	Home      bool
 	Branches  []BranchView
 }
 

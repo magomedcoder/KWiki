@@ -1,7 +1,7 @@
 {{define "content"}}
 <article>
   <header class="page-header">
-    <h1>{{.Title}}</h1>
+    {{if not .Home}}<h1>{{.Title}}</h1>{{end}}
     {{if .Email}}
     <div class="page-actions">
       {{if .Missing}}

@@ -42,7 +42,6 @@ type shell struct {
 type indexData struct {
 	shell
 	Catalog  bool
-	Pages    []usecase.PageItem
 	Branches []usecase.BranchView
 }
 
@@ -53,6 +52,7 @@ type pageData struct {
 	Revisions []domain.Revision
 	Missing   bool
 	EditHref  string
+	Home      bool
 	Branches  []usecase.BranchView
 }
 
@@ -137,7 +137,6 @@ func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor us
 	exec(w, r.index, indexData{
 		shell:    frame,
 		Catalog:  view.Catalog,
-		Pages:    view.Pages,
 		Branches: view.Branches,
 	})
 }
@@ -165,6 +164,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 		Revisions: view.Revisions,
 		Missing:   view.Missing,
 		EditHref:  view.EditHref,
+		Home:      view.Home,
 		Branches:  view.Branches,
 	})
 }

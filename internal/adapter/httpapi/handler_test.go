@@ -526,6 +526,30 @@ func TestChangePasswordClearsSession(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAssets(t *testing.T) {
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	css := httptest.NewRecorder()
+	mux.ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/css/tailwindcss.css", nil))
+	if css.Code != http.StatusOK || !strings.Contains(css.Body.String(), "wiki-btn") || !strings.Contains(css.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("стиль %d %s", css.Code, css.Header().Get("Content-Type"))
+	}
+
+	script := httptest.NewRecorder()
+	mux.ServeHTTP(script, httptest.NewRequest(http.MethodGet, "/js/main.js", nil))
+	if script.Code != http.StatusOK || !strings.Contains(script.Body.String(), "openDialog") {
+		t.Fatalf("скрипт %d", script.Code)
+	}
+
+	missing := httptest.NewRecorder()
+	mux.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/css/missing.css", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("чужой файл %d", missing.Code)
+	}
+}
+
 func TestFoldHome(t *testing.T) {
 	updated := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
 	got := foldHome([]usecase.SitemapEntry{

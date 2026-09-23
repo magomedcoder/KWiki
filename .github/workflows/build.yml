@@ -1,0 +1,38 @@
+name: Сборка
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.1
+          cache: true
+
+      - name: Build
+        run: |
+          npm install -g yarn@1.22.22
+          yarn install --frozen-lockfile
+          yarn build:css
+          CGO_ENABLED=1 go build -o kwiki ./cmd/kwiki
+
+      - name: Upload Release to GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest kwiki  --title "Latest build" --notes "Build main ${GITHUB_SHA}" --latest

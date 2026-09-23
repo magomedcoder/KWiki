@@ -1,15 +1,19 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
+	"time"
 
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
+	"github.com/magomedcoder/kwiki/resources"
 )
 
 type Wiki interface {
@@ -376,8 +380,8 @@ func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name, ok := map[string]string{
-		"/css/tailwindcss.css": "resources/css/tailwindcss.css",
-		"/js/main.js":          "resources/js/main.js",
+		"/css/tailwindcss.css": "css/tailwindcss.css",
+		"/js/main.js":          "js/main.js",
 	}[r.URL.Path]
 	if !ok {
 		markIndexable(w, false)
@@ -385,7 +389,14 @@ func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.ServeFile(w, r, name)
+	data, err := resources.FS.ReadFile(name)
+	if err != nil {
+		markIndexable(w, false)
+		http.Error(w, "страница не найдена", http.StatusNotFound)
+		return
+	}
+
+	http.ServeContent(w, r, path.Base(name), time.Time{}, bytes.NewReader(data))
 }
 
 func (h *Handler) edit(w http.ResponseWriter, r *http.Request) {

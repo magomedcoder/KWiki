@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -14,6 +14,7 @@ import (
 	"github.com/magomedcoder/kwiki/internal/adapter/markdown"
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
+	"github.com/magomedcoder/kwiki/resources"
 )
 
 var reTags = regexp.MustCompile(`>\s+<`)
@@ -113,56 +114,60 @@ func list(values ...any) []any {
 	return values
 }
 
-func parsePage(dir, page string) (*template.Template, error) {
-	components, err := filepath.Glob(filepath.Join(dir, "components", "*.tmpl"))
+func parsePage(fsys fs.FS, page string) (*template.Template, error) {
+	components, err := fs.Glob(fsys, "templates/components/*.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	files := append([]string{
-		filepath.Join(dir, "layout.tmpl"),
-		filepath.Join(dir, "pages", page),
+		"templates/layout.tmpl",
+		"templates/pages/" + page,
 	}, components...)
-	return template.New("layout.tmpl").Funcs(templateFuncs).Option("missingkey=zero").ParseFiles(files...)
+	return template.New("layout.tmpl").Funcs(templateFuncs).Option("missingkey=zero").ParseFS(fsys, files...)
 }
 
-func Load(dir string) (*Renderer, error) {
-	index, err := parsePage(dir, "index.tmpl")
+func Load() (*Renderer, error) {
+	return loadFS(resources.FS)
+}
+
+func loadFS(fsys fs.FS) (*Renderer, error) {
+	index, err := parsePage(fsys, "index.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	page, err := parsePage(dir, "page.tmpl")
+	page, err := parsePage(fsys, "page.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	edit, err := parsePage(dir, "edit.tmpl")
+	edit, err := parsePage(fsys, "edit.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	login, err := parsePage(dir, "login.tmpl")
+	login, err := parsePage(fsys, "login.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	users, err := parsePage(dir, "users.tmpl")
+	users, err := parsePage(fsys, "users.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	branches, err := parsePage(dir, "branches.tmpl")
+	branches, err := parsePage(fsys, "branches.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	notFound, err := parsePage(dir, "notfound.tmpl")
+	notFound, err := parsePage(fsys, "notfound.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	history, err := parsePage(dir, "history.tmpl")
+	history, err := parsePage(fsys, "history.tmpl")
 	if err != nil {
 		return nil, err
 	}

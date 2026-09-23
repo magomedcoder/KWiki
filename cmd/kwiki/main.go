@@ -71,7 +71,7 @@ func main() {
 		log.Printf("нет пользователей: kwiki user add -data %s -email kwiki@example.com -name Имя -surname Фамилия", paths.Root)
 	}
 
-	views, err := html.Load("resources/templates")
+	views, err := html.Load()
 	if err != nil {
 		log.Fatalf("шаблоны: %v", err)
 	}

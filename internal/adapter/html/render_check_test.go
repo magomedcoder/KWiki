@@ -12,7 +12,7 @@ import (
 )
 
 func TestComponentsKeepMarkup(t *testing.T) {
-	view, err := Load("../../../resources/templates")
+	view, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}

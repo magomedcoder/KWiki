@@ -1,18 +1,15 @@
-# KWiki - лёгкая система для ведения вики с историей изменений на базе Git
+# KWiki - лёгкая система для ведения вики на базе Git
 
-> **Ранний этап разработки.**
-
-## Сборка
+Последняя сборка для Linux: [скачать kwiki](https://github.com/magomedcoder/KWiki/releases/latest/download/kwiki).
 
 ```bash
-yarn build:css
-go build -o build/kwiki ./cmd/kwiki
+chmod +x kwiki
 ```
 
 ## Сервер
 
 ```bash
-./build/kwiki -data ./data -addr :8000 -pepper 'длинный-секрет' -secure
+./kwiki -data ./data -addr :8000 -pepper 'длинный-секрет' -secure
 ```
 
 | Флаг      | По умолчанию | Назначение                                                      |
@@ -30,15 +27,15 @@ go build -o build/kwiki ./cmd/kwiki
 Первый пользователь становится администратором. Флаг `-admin` делает администратором и следующих.
 
 ```bash
-./build/kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'длинный-секрет' -admin
+./kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'длинный-секрет' -admin
 
-./build/kwiki user passwd -data ./data -email kwiki@example.com -password 'N3w-Wiki-Password' -pepper 'длинный-секрет'
+./kwiki user passwd -data ./data -email kwiki@example.com -password 'N3w-Wiki-Password' -pepper 'длинный-секрет'
 
-./build/kwiki user block -data ./data -email editor@example.com
+./kwiki user block -data ./data -email editor@example.com
 
-./build/kwiki user unblock -data ./data -email editor@example.com
+./kwiki user unblock -data ./data -email editor@example.com
 
-./build/kwiki user delete -data ./data -email editor@example.com
+./kwiki user delete -data ./data -email editor@example.com
 ```
 
 | Команда        | Флаги                                                              |
@@ -50,3 +47,32 @@ go build -o build/kwiki ./cmd/kwiki
 | `user delete`  | `-data` `-email`                                                   |
 
 `-pepper` у `user add`, `user passwd` и у сервера должен совпадать. Иначе уже сохранённые пароли не подойдут.
+
+---
+
+## Docker
+
+```bash
+docker build -t kwiki .
+docker run -p 8000:8000 -v kwiki-data:/var/lib/data kwiki -pepper 'длинный-секрет'
+```
+
+Данные в томе `kwiki-data`. Первый пользователь:
+
+```bash
+docker run --rm -v kwiki-data:/var/lib/data kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'длинный-секрет' -admin
+```
+
+---
+
+## Сборка из исходников
+
+Нужны Go 1.27, Node.js 22 и Yarn 1.22.
+
+```bash
+yarn
+yarn build:css
+go build -o build/kwiki ./cmd/kwiki
+```
+
+`yarn build:css` нужен до `go build`

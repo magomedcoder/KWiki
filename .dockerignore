@@ -1,0 +1,6 @@
+.git
+.idea
+build
+data
+node_modules
+resources/css/tailwindcss.css

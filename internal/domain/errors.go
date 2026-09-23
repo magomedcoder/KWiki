@@ -16,4 +16,7 @@ var (
 	ErrBlocked            = errors.New("учётная запись заблокирована")
 	ErrLastAdmin          = errors.New("нельзя удалить или заблокировать последнего администратора")
 	ErrSelfAction         = errors.New("нельзя изменить свою учётную запись")
+	ErrInvalidBranch      = errors.New("некорректное имя ветки")
+	ErrBranchTaken        = errors.New("ветка уже есть")
+	ErrDefaultBranch      = errors.New("нельзя удалить основную ветку")
 )

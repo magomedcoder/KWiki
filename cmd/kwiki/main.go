@@ -22,7 +22,6 @@ func main() {
 		}
 		return
 	}
-
 	data := flag.String("data", "./data", "")
 	addr := flag.String("addr", ":8000", "")
 	secure := flag.Bool("secure", false, "")
@@ -45,7 +44,10 @@ func main() {
 		log.Fatalf("пароль: %v", err)
 	}
 
-	wiki := usecase.New(db, content)
+	wiki := usecase.New(db, db, content)
+	if err := wiki.EnsureDefault(context.Background()); err != nil {
+		log.Fatalf("ветки: %v", err)
+	}
 	if err := wiki.Sync(context.Background()); err != nil {
 		log.Fatalf("синхронизация: %v", err)
 	}

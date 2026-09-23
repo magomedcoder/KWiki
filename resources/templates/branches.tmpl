@@ -1,0 +1,58 @@
+{{define "content"}}
+<h1>Ветки</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Notice}}<p class="notice">{{.Notice}}</p>{{end}}
+
+<p>Публичная ветка открыта без входа и попадает в карту сайта. Приватная видна только после входа.</p>
+
+<h2>Новая ветка</h2>
+<form method="POST" action="/branches" class="editor">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create">
+  <label>
+    Имя
+    <input type="text" name="name" required maxlength="32" placeholder="например: docs" autocomplete="off">
+  </label>
+  <label class="check">
+    <input type="checkbox" name="public" value="1">
+    Публичная
+  </label>
+  <div class="actions">
+    <button type="submit">Создать</button>
+  </div>
+</form>
+
+<table class="users">
+  <thead>
+    <tr>
+      <th>Имя</th>
+      <th>Доступ</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Branches}}
+    <tr>
+      <td><a href="{{if eq .Name "main"}}/{{else}}/b/{{.Name}}{{end}}">{{.Name}}</a></td>
+      <td>{{if .Public}}публичная{{else}}приватная{{end}}</td>
+      <td>
+        <div class="row-actions">
+          <form method="POST" action="/branches">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="name" value="{{.Name}}">
+            {{if .Public}}
+            <button type="submit" name="action" value="private">Сделать приватной</button>
+            {{else}}
+            <button type="submit" name="action" value="public">Сделать публичной</button>
+            {{end}}
+            {{if ne .Name "main"}}
+            <button type="submit" name="action" value="delete">Удалить</button>
+            {{end}}
+          </form>
+        </div>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

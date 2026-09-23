@@ -3,12 +3,25 @@
 <form method="POST" action="/edit" class="editor">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <label>
-    Slug
+    Ветка
+    {{if .IsNew}}
+    <select name="branch">
+      {{range .Branches}}
+      <option value="{{.Name}}" {{if eq .Name $.Branch}}selected{{end}}>{{.Name}}{{if not .Public}} (приватная){{end}}</option>
+      {{end}}
+    </select>
+    {{else}}
+    <input type="hidden" name="branch" value="{{.Branch}}">
+    <input type="text" value="{{.Branch}}" readonly>
+    {{end}}
+  </label>
+  <label>
+    Адрес
     <input
       type="text"
       name="slug"
       value="{{.Slug}}"
-      placeholder="например: руководства/введение"
+      placeholder="например: zametki/vvedenie"
       {{if not .IsNew}}readonly{{end}}
       required
       autofocus
@@ -16,7 +29,7 @@
   </label>
 
   <label>
-    Содержимое (Markdown)
+    Текст
     <textarea
       name="content"
       rows="24"
@@ -27,7 +40,7 @@
 
   <div class="actions">
     <button type="submit">Сохранить</button>
-    <a href="{{if .Slug}}/{{.Slug}}{{else}}/{{end}}">Отмена</a>
+    <a href="{{if .Slug}}{{if eq .Branch "main"}}/{{.Slug}}{{else}}/b/{{.Branch}}/{{.Slug}}{{end}}{{else}}{{.Home}}{{end}}">Отмена</a>
   </div>
 </form>
 {{end}}

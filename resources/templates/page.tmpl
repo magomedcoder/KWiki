@@ -2,13 +2,15 @@
 <article>
   <header class="page-header">
     <h1>{{.Title}}</h1>
+    {{if .Email}}
     <div class="page-actions">
       {{if .Missing}}
-        <a class="btn" href="/edit?slug={{.Slug}}">Создать страницу</a>
+        <a class="btn" href="{{.EditHref}}">Создать страницу</a>
       {{else}}
-        <a class="btn" href="/edit?slug={{.Slug}}">Редактировать</a>
+        <a class="btn" href="{{.EditHref}}">Редактировать</a>
       {{end}}
     </div>
+    {{end}}
   </header>
 
   {{if .Missing}}

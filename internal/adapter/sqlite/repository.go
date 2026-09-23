@@ -22,7 +22,8 @@ var _ domain.PageRepository = (*Repository)(nil)
 
 type pageRow struct {
 	ID        uint   `gorm:"primaryKey"`
-	Slug      string `gorm:"uniqueIndex;size:255"`
+	Branch    string `gorm:"uniqueIndex:idx_page_branch_slug,priority:1;size:64;not null;default:main"`
+	Slug      string `gorm:"uniqueIndex:idx_page_branch_slug,priority:2;size:255;not null"`
 	Title     string `gorm:"size:255"`
 	Path      string `gorm:"size:512"`
 	Hash      string `gorm:"size:64"`
@@ -36,7 +37,8 @@ func (pageRow) TableName() string {
 
 type revisionRow struct {
 	ID        uint   `gorm:"primaryKey"`
-	Slug      string `gorm:"index;size:255"`
+	Branch    string `gorm:"index:idx_rev_branch_slug,priority:1;size:64;not null;default:main"`
+	Slug      string `gorm:"index:idx_rev_branch_slug,priority:2;size:255"`
 	Hash      string `gorm:"size:64"`
 	Message   string
 	Author    string `gorm:"size:255"`
@@ -63,16 +65,32 @@ func Open(path string) (*Repository, error) {
 		return nil, err
 	}
 
-	if err := db.AutoMigrate(&pageRow{}, &revisionRow{}, &userRow{}, &sessionRow{}, &attemptRow{}); err != nil {
+	if err := db.AutoMigrate(&pageRow{}, &revisionRow{}, &branchRow{}, &userRow{}, &sessionRow{}, &attemptRow{}); err != nil {
+		return nil, err
+	}
+
+	if err := migrateBranches(db); err != nil {
 		return nil, err
 	}
 
 	return &Repository{db: db}, nil
 }
 
-func (r *Repository) List(ctx context.Context) ([]domain.Page, error) {
+func migrateBranches(db *gorm.DB) error {
+	if err := db.Exec(`UPDATE page_indices SET branch = 'main' WHERE branch IS NULL OR branch = ''`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`UPDATE revisions SET branch = 'main' WHERE branch IS NULL OR branch = ''`).Error; err != nil {
+		return err
+	}
+
+	return db.Exec(`DROP INDEX IF EXISTS idx_page_indices_slug`).Error
+}
+
+func (r *Repository) List(ctx context.Context, branch string) ([]domain.Page, error) {
 	var rows []pageRow
-	if err := r.db.WithContext(ctx).Order("slug ASC").Find(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("branch = ?", branch).Order("slug ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 
@@ -84,10 +102,10 @@ func (r *Repository) List(ctx context.Context) ([]domain.Page, error) {
 	return pages, nil
 }
 
-func (r *Repository) Revisions(ctx context.Context, slug string, limit int) ([]domain.Revision, error) {
+func (r *Repository) Revisions(ctx context.Context, branch, slug string, limit int) ([]domain.Revision, error) {
 	var rows []revisionRow
 	err := r.db.WithContext(ctx).
-		Where("slug = ?", slug).
+		Where("branch = ? AND slug = ?", branch, slug).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&rows).Error
@@ -98,6 +116,7 @@ func (r *Repository) Revisions(ctx context.Context, slug string, limit int) ([]d
 	revs := make([]domain.Revision, 0, len(rows))
 	for _, row := range rows {
 		revs = append(revs, domain.Revision{
+			Branch:    row.Branch,
 			Slug:      row.Slug,
 			Hash:      row.Hash,
 			Message:   row.Message,
@@ -111,6 +130,7 @@ func (r *Repository) Revisions(ctx context.Context, slug string, limit int) ([]d
 
 func (r *Repository) Upsert(ctx context.Context, page domain.Page) error {
 	row := pageRow{
+		Branch:    page.Branch,
 		Slug:      page.Slug,
 		Title:     page.Title,
 		Path:      page.Path,
@@ -119,7 +139,7 @@ func (r *Repository) Upsert(ctx context.Context, page domain.Page) error {
 		UpdatedAt: page.UpdatedAt,
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "slug"}},
+		Columns:   []clause.Column{{Name: "branch"}, {Name: "slug"}},
 		DoUpdates: clause.AssignmentColumns([]string{"title", "path", "hash", "size", "updated_at"}),
 	}).Create(&row).Error
 }
@@ -127,7 +147,7 @@ func (r *Repository) Upsert(ctx context.Context, page domain.Page) error {
 func (r *Repository) AddRevisionIfMissing(ctx context.Context, rev domain.Revision) error {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&revisionRow{}).
-		Where("slug = ? AND hash = ?", rev.Slug, rev.Hash).
+		Where("branch = ? AND slug = ? AND hash = ?", rev.Branch, rev.Slug, rev.Hash).
 		Count(&count).Error
 	if err != nil {
 		return err
@@ -137,6 +157,7 @@ func (r *Repository) AddRevisionIfMissing(ctx context.Context, rev domain.Revisi
 	}
 
 	return r.db.WithContext(ctx).Create(&revisionRow{
+		Branch:    rev.Branch,
 		Slug:      rev.Slug,
 		Hash:      rev.Hash,
 		Message:   rev.Message,
@@ -145,8 +166,26 @@ func (r *Repository) AddRevisionIfMissing(ctx context.Context, rev domain.Revisi
 	}).Error
 }
 
+func (r *Repository) Prune(ctx context.Context, branch string, slugs []string) error {
+	query := r.db.WithContext(ctx).Where("branch = ?", branch)
+	if len(slugs) > 0 {
+		query = query.Where("slug NOT IN ?", slugs)
+	}
+
+	return query.Delete(&pageRow{}).Error
+}
+
+func (r *Repository) DeleteBranchPages(ctx context.Context, branch string) error {
+	if err := r.db.WithContext(ctx).Where("branch = ?", branch).Delete(&pageRow{}).Error; err != nil {
+		return err
+	}
+
+	return r.db.WithContext(ctx).Where("branch = ?", branch).Delete(&revisionRow{}).Error
+}
+
 func toPage(row pageRow) domain.Page {
 	return domain.Page{
+		Branch:    row.Branch,
 		Slug:      row.Slug,
 		Title:     row.Title,
 		Path:      row.Path,

@@ -30,6 +30,7 @@ func (h *Handler) Protect(next http.Handler) http.Handler {
 
 func (h *Handler) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		actor, err := h.resume(r)
 		if errors.Is(err, domain.ErrUnauthenticated) {
 			h.clearCookie(w, r)
@@ -52,6 +53,21 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), actorKey{}, actor)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (h *Handler) optionalAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor, err := h.resume(r)
+		if err != nil && !errors.Is(err, domain.ErrUnauthenticated) {
+			http.Error(w, "ошибка входа", http.StatusInternalServerError)
+			return
+		}
+
+		if err == nil {
+			r = r.WithContext(context.WithValue(r.Context(), actorKey{}, actor))
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

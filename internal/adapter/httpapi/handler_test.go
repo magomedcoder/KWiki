@@ -113,21 +113,69 @@ type stubWiki struct {
 	saved bool
 }
 
-func (stubWiki) ListPages(context.Context) ([]domain.Page, error) {
+func (stubWiki) OpenBranch(_ context.Context, name string) (domain.Branch, error) {
+	switch name {
+	case domain.DefaultBranch:
+		return domain.Branch{Name: name, Public: false}, nil
+	case "docs":
+		return domain.Branch{Name: name, Public: true}, nil
+	default:
+		return domain.Branch{}, domain.ErrNotFound
+	}
+}
+
+func (stubWiki) VisibleBranches(_ context.Context, authenticated bool) ([]domain.Branch, error) {
+	docs := domain.Branch{Name: "docs", Public: true}
+	if !authenticated {
+		return []domain.Branch{docs}, nil
+	}
+	return []domain.Branch{
+		{Name: domain.DefaultBranch, Public: false},
+		docs,
+	}, nil
+}
+
+func (stubWiki) ListBranches(context.Context) ([]domain.Branch, error) {
+	return []domain.Branch{{Name: domain.DefaultBranch}, {Name: "docs", Public: true}}, nil
+}
+
+func (stubWiki) ListPages(context.Context, string) ([]domain.Page, error) {
 	return nil, nil
 }
 
-func (stubWiki) ViewPage(context.Context, string) (usecase.PageView, error) {
-	return usecase.PageView{}, nil
+func (stubWiki) ViewPage(_ context.Context, branch, slug string) (usecase.PageView, error) {
+	return usecase.PageView{
+		Title:    "intro",
+		Slug:     slug,
+		Branch:   branch,
+		Markdown: "Текст страницы",
+		Public:   branch == "docs",
+	}, nil
 }
 
-func (stubWiki) EditForm(context.Context, string) (usecase.EditForm, error) {
+func (stubWiki) EditForm(context.Context, string, string) (usecase.EditForm, error) {
 	return usecase.EditForm{}, nil
 }
 
-func (s *stubWiki) SavePage(context.Context, string, string) (string, error) {
+func (s *stubWiki) SavePage(context.Context, string, string, string) (string, error) {
 	s.saved = true
 	return "home", nil
+}
+
+func (stubWiki) CreateBranch(context.Context, string, bool) (domain.Branch, error) {
+	return domain.Branch{}, nil
+}
+
+func (stubWiki) SetBranchPublic(context.Context, string, bool) error {
+	return nil
+}
+
+func (stubWiki) DeleteBranch(context.Context, string) error {
+	return nil
+}
+
+func (stubWiki) Sitemap(context.Context) ([]usecase.SitemapEntry, error) {
+	return []usecase.SitemapEntry{{Path: "/b/docs"}, {Path: "/b/docs/intro"}}, nil
 }
 
 type stubAuth struct {
@@ -173,16 +221,82 @@ func (s *stubAuth) SetBlocked(context.Context, string, string, bool) error {
 
 type stubView struct {
 	login usecase.LoginPage
+	index usecase.IndexView
+	page  usecase.PageScreen
 }
 
-func (stubView) Index(http.ResponseWriter, []domain.Page, usecase.Actor) {}
+func (s *stubView) Index(_ http.ResponseWriter, view usecase.IndexView, _ usecase.Actor) {
+	s.index = view
+}
 
-func (stubView) Page(http.ResponseWriter, usecase.PageView, usecase.Actor) {}
+func (s *stubView) Page(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor) {
+	s.page = view
+}
 
-func (stubView) Edit(http.ResponseWriter, usecase.EditForm, usecase.Actor) {}
+func (stubView) Edit(http.ResponseWriter, usecase.EditForm, []domain.Branch, usecase.Actor) {}
 
 func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor) {}
 
+func (stubView) Branches(http.ResponseWriter, usecase.BranchesPage, usecase.Actor) {}
+
 func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
 	s.login = page
+}
+
+func TestPublicBranchIsIndexed(t *testing.T) {
+	view := &stubView{}
+	h := New(&stubWiki{}, &stubAuth{}, view, true)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/b/docs/intro", nil)
+	req.Host = "wiki.example"
+	h.Protect(mux).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+
+	if !strings.Contains(rec.Header().Get("X-Robots-Tag"), "index") {
+		t.Fatalf("robots %q", rec.Header().Get("X-Robots-Tag"))
+	}
+
+	if !view.page.Indexable || view.page.Canonical != "https://wiki.example/b/docs/intro" {
+		t.Fatalf("page %+v", view.page)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "wiki.example"
+	h.Protect(mux).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !view.index.Catalog || !view.index.Indexable {
+		t.Fatalf("catalog status %d view %+v", rec.Code, view.index)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
+	req.Host = "wiki.example"
+	h.Protect(mux).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "https://wiki.example/b/docs/intro") {
+		t.Fatalf("sitemap %d %s", rec.Code, rec.Body.String())
+	}
+
+	if strings.Contains(rec.Body.String(), "/b/secret") {
+		t.Fatal("private branch listed")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	req.Host = "wiki.example"
+	h.Protect(mux).ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") {
+		t.Fatalf("robots.txt %s", body)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/main/intro", nil))
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/intro" {
+		t.Fatalf("redirect %d %q", rec.Code, rec.Header().Get("Location"))
+	}
 }

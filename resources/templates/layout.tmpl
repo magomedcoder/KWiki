@@ -4,6 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{{.Title}} | KWiki</title>
+    {{if .Indexable}}
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+    {{if .Description}}
+    <meta name="description" content="{{.Description}}">
+    <meta property="og:description" content="{{.Description}}">
+    {{end}}
+    <meta property="og:title" content="{{.Title}}">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ru_RU">
+    {{if .Canonical}}<meta property="og:url" content="{{.Canonical}}">{{end}}
+    {{if .Modified}}<meta property="article:modified_time" content="{{.Modified}}">{{end}}
+    {{else}}
+    <meta name="robots" content="noindex, nofollow">
+    {{end}}
     <style>
         body {
             font-family: system-ui, sans-serif;
@@ -111,6 +126,7 @@
         .editor input[type=text],
         .editor input[type=email],
         .editor input[type=password],
+        .editor select,
         .editor textarea {
             width: 100%;
             padding: .5rem;
@@ -142,6 +158,13 @@
             font-size: 14px;
         }
 
+        nav.branches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .7rem;
+            margin: 1rem 0;
+        }
+
         code {
             background: #f5f5f5;
             padding: 1px 4px;
@@ -151,11 +174,12 @@
 </head>
 <body>
 <header class="site">
-    <a href="/"><strong>KWiki</strong></a>
+    <a href="{{.Home}}"><strong>KWiki</strong></a>
     <nav>
         {{if .Email}}
-        <a href="/">Все страницы</a>
-        <a href="/edit">Новая страница</a>
+        <a href="{{.Home}}">Страницы</a>
+        <a href="{{.NewHref}}">Новая страница</a>
+        {{if .Admin}}<a href="/branches">Ветки</a>{{end}}
         {{if .Admin}}<a href="/users">Пользователи</a>{{end}}
         <span>{{.Name}}</span>
         <form method="POST" action="/logout" class="logout">

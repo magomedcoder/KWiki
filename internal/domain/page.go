@@ -3,6 +3,7 @@ package domain
 import "time"
 
 type Page struct {
+	Branch    string
 	Slug      string
 	Title     string
 	Path      string
@@ -12,6 +13,7 @@ type Page struct {
 }
 
 type Revision struct {
+	Branch    string
 	Slug      string
 	Hash      string
 	Message   string

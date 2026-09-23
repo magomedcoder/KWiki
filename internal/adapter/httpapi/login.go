@@ -10,6 +10,7 @@ import (
 )
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	switch r.Method {
 	case http.MethodGet:
 		h.showLogin(w, r)

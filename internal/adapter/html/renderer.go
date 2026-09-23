@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/magomedcoder/kwiki/internal/adapter/markdown"
 	"github.com/magomedcoder/kwiki/internal/domain"
@@ -16,24 +17,33 @@ import (
 var reTags = regexp.MustCompile(`>\s+<`)
 
 type Renderer struct {
-	index *template.Template
-	page  *template.Template
-	edit  *template.Template
-	login *template.Template
-	users *template.Template
+	index    *template.Template
+	page     *template.Template
+	edit     *template.Template
+	login    *template.Template
+	users    *template.Template
+	branches *template.Template
 }
 
 type shell struct {
-	Title string
-	Email string
-	Name  string
-	Admin bool
-	CSRF  string
+	Title       string
+	Email       string
+	Name        string
+	Admin       bool
+	CSRF        string
+	Home        string
+	NewHref     string
+	Indexable   bool
+	Canonical   string
+	Description string
+	Modified    string
 }
 
 type indexData struct {
 	shell
-	Pages []domain.Page
+	Catalog  bool
+	Pages    []usecase.PageItem
+	Branches []usecase.BranchView
 }
 
 type pageData struct {
@@ -42,13 +52,17 @@ type pageData struct {
 	Body      template.HTML
 	Revisions []domain.Revision
 	Missing   bool
+	EditHref  string
+	Branches  []usecase.BranchView
 }
 
 type editData struct {
 	shell
-	Slug    string
-	Content string
-	IsNew   bool
+	Branch   string
+	Slug     string
+	Content  string
+	IsNew    bool
+	Branches []domain.Branch
 }
 
 type loginData struct {
@@ -84,58 +98,93 @@ func Load(dir string) (*Renderer, error) {
 		return nil, err
 	}
 
+	branches, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "branches.tmpl"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Renderer{
-		index: index,
-		page:  page,
-		edit:  edit,
-		login: login,
-		users: users,
+		index:    index,
+		page:     page,
+		edit:     edit,
+		login:    login,
+		users:    users,
+		branches: branches,
 	}, nil
 }
 
 func actorShell(title string, actor usecase.Actor) shell {
 	return shell{
-		Title: title,
-		Email: actor.Email,
-		Name:  actor.Name,
-		Admin: actor.Admin,
-		CSRF:  actor.CSRF,
+		Title:   title,
+		Email:   actor.Email,
+		Name:    actor.Name,
+		Admin:   actor.Admin,
+		CSRF:    actor.CSRF,
+		Home:    "/",
+		NewHref: "/edit",
 	}
 }
 
-func (r *Renderer) Index(w http.ResponseWriter, pages []domain.Page, actor usecase.Actor) {
+func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor usecase.Actor) {
+	frame := actorShell(view.Title, actor)
+	frame.Indexable = view.Indexable
+	frame.Canonical = view.Canonical
+	frame.Description = view.Description
+	if view.Branch != "" {
+		frame.Home = domain.PagePath(view.Branch, "")
+		frame.NewHref = domain.EditPath(view.Branch, "")
+	}
 	exec(w, r.index, indexData{
-		shell: actorShell("KWiki", actor),
-		Pages: pages,
+		shell:    frame,
+		Catalog:  view.Catalog,
+		Pages:    view.Pages,
+		Branches: view.Branches,
 	})
 }
 
-func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageView, actor usecase.Actor) {
+func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor) {
 	var body template.HTML
 	if !view.Missing {
 		body = template.HTML(markdown.HTML([]byte(view.Markdown)))
 	}
 
+	frame := actorShell(view.Title, actor)
+	frame.Indexable = view.Indexable
+	frame.Canonical = view.Canonical
+	frame.Description = view.Description
+	frame.Home = domain.PagePath(view.Branch, "")
+	frame.NewHref = domain.EditPath(view.Branch, "")
+	if !view.UpdatedAt.IsZero() {
+		frame.Modified = view.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+
 	exec(w, r.page, pageData{
-		shell:     actorShell(view.Title, actor),
+		shell:     frame,
 		Slug:      view.Slug,
 		Body:      body,
 		Revisions: view.Revisions,
 		Missing:   view.Missing,
+		EditHref:  view.EditHref,
+		Branches:  view.Branches,
 	})
 }
 
-func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, actor usecase.Actor) {
+func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor) {
 	title := "Новая страница"
 	if !form.IsNew {
 		title = "Редактирование: " + form.Slug
 	}
 
+	frame := actorShell(title, actor)
+	frame.Home = domain.PagePath(form.Branch, "")
+	frame.NewHref = domain.EditPath(form.Branch, "")
 	exec(w, r.edit, editData{
-		shell:   actorShell(title, actor),
-		Slug:    form.Slug,
-		Content: form.Content,
-		IsNew:   form.IsNew,
+		shell:    frame,
+		Branch:   form.Branch,
+		Slug:     form.Slug,
+		Content:  form.Content,
+		IsNew:    form.IsNew,
+		Branches: branches,
 	})
 }
 
@@ -149,10 +198,19 @@ func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor us
 	})
 }
 
+func (r *Renderer) Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor) {
+	exec(w, r.branches, struct {
+		shell
+		usecase.BranchesPage
+	}{
+		shell:        actorShell("Ветки", actor),
+		BranchesPage: page,
+	})
+}
+
 func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
 	exec(w, r.login, loginData{
-		Title: "Вход",
-		CSRF:  page.CSRF,
+		shell: shell{Title: "Вход", CSRF: page.CSRF, Home: "/"},
 		Error: page.Error,
 		Next:  page.Next,
 		Value: page.Email,

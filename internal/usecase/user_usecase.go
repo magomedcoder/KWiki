@@ -408,7 +408,11 @@ func (a *UserUseCase) Resume(ctx context.Context, token, client string) (Actor, 
 		return Actor{}, err
 	}
 
-	if sess.UserID == "" || !sess.ExpiresAt.After(now) || sess.ClientHash != clientHash(client) {
+	if sess.UserID == "" {
+		return Actor{}, domain.ErrUnauthenticated
+	}
+
+	if !sess.ExpiresAt.After(now) || sess.ClientHash != clientHash(client) {
 		_ = a.sessions.Delete(ctx, sess.ID)
 		return Actor{}, domain.ErrUnauthenticated
 	}

@@ -70,7 +70,7 @@ func ensureInitialCommit(repo *git.Repository, root string) error {
 		}
 	}
 
-	_, err = wt.Commit("initial commit", &git.CommitOptions{
+	_, err = wt.Commit("начальный коммит", &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  "kwiki",
 			Email: "kwiki@localhost",

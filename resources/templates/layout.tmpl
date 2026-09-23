@@ -53,6 +53,43 @@
             border-radius: 4px;
         }
 
+        .notice {
+            color: #145214;
+            background: #eef6ee;
+            padding: .6rem .8rem;
+            border-radius: 4px;
+        }
+
+        .check {
+            display: flex;
+            gap: .4rem;
+            align-items: center;
+        }
+
+        table.users {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+
+        table.users th,
+        table.users td {
+            text-align: left;
+            padding: .45rem .3rem;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+        }
+
+        .row-actions {
+            display: flex;
+            gap: .4rem;
+            align-items: center;
+        }
+
+        .row-actions form {
+            margin: 0;
+        }
+
         .page-actions {
             margin: .5rem 0;
         }
@@ -119,7 +156,8 @@
         {{if .Email}}
         <a href="/">Все страницы</a>
         <a href="/edit">Новая страница</a>
-        <span>{{.Email}}</span>
+        {{if .Admin}}<a href="/users">Пользователи</a>{{end}}
+        <span>{{.Name}}</span>
         <form method="POST" action="/logout" class="logout">
             <input type="hidden" name="csrf" value="{{.CSRF}}">
             <button type="submit">Выйти</button>

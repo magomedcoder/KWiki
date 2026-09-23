@@ -16,10 +16,7 @@ func cookieName(secure bool) string {
 }
 
 func (h *Handler) setCookie(w http.ResponseWriter, r *http.Request, token string, exp time.Time) {
-	maxAge := int(time.Until(exp).Seconds())
-	if maxAge < 0 {
-		maxAge = 0
-	}
+	maxAge := max(int(time.Until(exp).Seconds()), 0)
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cookieName,
 		Value:    token,

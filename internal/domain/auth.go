@@ -14,6 +14,14 @@ type UserRepository interface {
 
 	UpdatePasswordHash(ctx context.Context, id, hash string) error
 
+	SetBlocked(ctx context.Context, id string, blocked bool) error
+
+	SetAdmin(ctx context.Context, id string, admin bool) error
+
+	DeleteUser(ctx context.Context, id string) error
+
+	ListUsers(ctx context.Context) ([]User, error)
+
 	Count(ctx context.Context) (int64, error)
 }
 

@@ -20,11 +20,14 @@ type Renderer struct {
 	page  *template.Template
 	edit  *template.Template
 	login *template.Template
+	users *template.Template
 }
 
 type shell struct {
 	Title string
 	Email string
+	Name  string
+	Admin bool
 	CSRF  string
 }
 
@@ -76,17 +79,33 @@ func Load(dir string) (*Renderer, error) {
 		return nil, err
 	}
 
+	users, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "users.tmpl"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Renderer{
 		index: index,
 		page:  page,
 		edit:  edit,
 		login: login,
+		users: users,
 	}, nil
+}
+
+func actorShell(title string, actor usecase.Actor) shell {
+	return shell{
+		Title: title,
+		Email: actor.Email,
+		Name:  actor.Name,
+		Admin: actor.Admin,
+		CSRF:  actor.CSRF,
+	}
 }
 
 func (r *Renderer) Index(w http.ResponseWriter, pages []domain.Page, actor usecase.Actor) {
 	exec(w, r.index, indexData{
-		shell: shell{Title: "KWiki", Email: actor.Email, CSRF: actor.CSRF},
+		shell: actorShell("KWiki", actor),
 		Pages: pages,
 	})
 }
@@ -98,7 +117,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageView, actor usec
 	}
 
 	exec(w, r.page, pageData{
-		shell:     shell{Title: view.Title, Email: actor.Email, CSRF: actor.CSRF},
+		shell:     actorShell(view.Title, actor),
 		Slug:      view.Slug,
 		Body:      body,
 		Revisions: view.Revisions,
@@ -113,16 +132,27 @@ func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, actor usec
 	}
 
 	exec(w, r.edit, editData{
-		shell:   shell{Title: title, Email: actor.Email, CSRF: actor.CSRF},
+		shell:   actorShell(title, actor),
 		Slug:    form.Slug,
 		Content: form.Content,
 		IsNew:   form.IsNew,
 	})
 }
 
+func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor) {
+	exec(w, r.users, struct {
+		shell
+		usecase.UsersPage
+	}{
+		shell:     actorShell("Пользователи", actor),
+		UsersPage: page,
+	})
+}
+
 func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
 	exec(w, r.login, loginData{
-		shell: shell{Title: "Вход", CSRF: page.CSRF},
+		Title: "Вход",
+		CSRF:  page.CSRF,
 		Error: page.Error,
 		Next:  page.Next,
 		Value: page.Email,
@@ -132,8 +162,8 @@ func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
 func exec(w http.ResponseWriter, t *template.Template, data any) {
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout.tmpl", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Printf("template error: %v", err)
+		http.Error(w, "ошибка шаблона", http.StatusInternalServerError)
+		log.Printf("ошибка шаблона: %v", err)
 		return
 	}
 

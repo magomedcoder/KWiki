@@ -107,9 +107,9 @@ func (p *PageUseCase) SavePage(ctx context.Context, rawSlug, content string) (st
 	}
 
 	path := domain.MarkdownPath(slug)
-	action := "edit"
+	action := "правка"
 	if _, err := p.content.Read(ctx, path); errors.Is(err, domain.ErrNotFound) {
-		action = "create"
+		action = "создание"
 	} else if err != nil {
 		return "", err
 	}

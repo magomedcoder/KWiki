@@ -12,12 +12,11 @@ import (
 func TestLoginSuccessAndClientBinding(t *testing.T) {
 	ctx := context.Background()
 	auth, users, sessions := newTestAuth()
-	if err := auth.CreateUser(ctx, "Admin@Example.com", "S3cure-Wiki-Pass"); err != nil {
-		t.Fatal(err)
-	}
+	createUser(t, auth, "Admin@Example.com", "S3cure-Wiki-Pass")
 
-	if _, ok := users.byEmail["admin@example.com"]; !ok {
-		t.Fatal("email was not normalized")
+	saved, ok := users.byEmail["admin@example.com"]
+	if !ok || saved.FirstName != "Иван" || saved.LastName != "Иванов" || !saved.Admin {
+		t.Fatalf("saved user %+v", saved)
 	}
 
 	challenge, err := auth.BeginLogin(ctx, "", "browser")
@@ -62,11 +61,8 @@ func TestLoginRejectsBadCSRF(t *testing.T) {
 }
 
 func TestLoginHidesUnknownUser(t *testing.T) {
-	ctx := context.Background()
 	auth, _, _ := newTestAuth()
-	if err := auth.CreateUser(ctx, "admin@example.com", "S3cure-Wiki-Pass"); err != nil {
-		t.Fatal(err)
-	}
+	createUser(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
 
 	unknown := loginOnce(t, auth, "missing@example.com", "S3cure-Wiki-Pass")
 	wrong := loginOnce(t, auth, "admin@example.com", "Wrong-Password-1")
@@ -76,16 +72,13 @@ func TestLoginHidesUnknownUser(t *testing.T) {
 }
 
 func TestLoginLockout(t *testing.T) {
-	ctx := context.Background()
 	auth, _, _ := newTestAuth()
 	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
 	auth.now = func() time.Time { return now }
-	if err := auth.CreateUser(ctx, "admin@example.com", "S3cure-Wiki-Pass"); err != nil {
-		t.Fatal(err)
-	}
+	createUser(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
 
 	var last error
-	for i := 0; i < maxFailures; i++ {
+	for range maxFailures {
 		last = loginOnce(t, auth, "admin@example.com", "Wrong-Password-1")
 	}
 
@@ -107,9 +100,7 @@ func TestLoginLockout(t *testing.T) {
 func TestChangePasswordRevokesSession(t *testing.T) {
 	ctx := context.Background()
 	auth, _, _ := newTestAuth()
-	if err := auth.CreateUser(ctx, "admin@example.com", "S3cure-Wiki-Pass"); err != nil {
-		t.Fatal(err)
-	}
+	createUser(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
 
 	issued := mustLogin(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
 	if err := auth.ChangePassword(ctx, "admin@example.com", "N3w-Wiki-Password"); err != nil {
@@ -122,6 +113,78 @@ func TestChangePasswordRevokesSession(t *testing.T) {
 
 	if err := loginOnce(t, auth, "admin@example.com", "S3cure-Wiki-Pass"); !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("old password err %v", err)
+	}
+}
+
+func TestBlockAndDeleteUser(t *testing.T) {
+	ctx := context.Background()
+	auth, users, sessions := newTestAuth()
+	createUser(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
+	if err := auth.CreateUser(ctx, Account{
+		FirstName: "Пётр",
+		LastName:  "Петров",
+		Email:     "petr@example.com",
+		Password:  "S3cure-Wiki-Pass",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if users.byEmail["petr@example.com"].Admin {
+		t.Fatal("second user became admin")
+	}
+
+	issued := mustLogin(t, auth, "petr@example.com", "S3cure-Wiki-Pass")
+	admin := users.byEmail["admin@example.com"]
+	if err := auth.SetBlocked(ctx, admin.ID, "petr@example.com", true); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := auth.Resume(ctx, issued.Token, "browser"); !errors.Is(err, domain.ErrUnauthenticated) {
+		t.Fatalf("blocked session err %v", err)
+	}
+
+	if err := loginOnce(t, auth, "petr@example.com", "S3cure-Wiki-Pass"); !errors.Is(err, domain.ErrBlocked) {
+		t.Fatalf("blocked login err %v", err)
+	}
+
+	if err := auth.SetBlocked(ctx, admin.ID, "admin@example.com", true); !errors.Is(err, domain.ErrSelfAction) {
+		t.Fatalf("self block err %v", err)
+	}
+
+	if err := auth.SetBlocked(ctx, "", "admin@example.com", true); !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("block last admin err %v", err)
+	}
+
+	if err := auth.SetBlocked(ctx, "", "petr@example.com", false); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := auth.DeleteUser(ctx, admin.ID, "petr@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := users.FindByEmail(ctx, "petr@example.com"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("deleted user err %v", err)
+	}
+
+	if err := auth.DeleteUser(ctx, "", "admin@example.com"); !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("delete last admin err %v", err)
+	}
+
+	if len(sessions.items) != 0 {
+		t.Fatalf("sessions left: %d", len(sessions.items))
+	}
+}
+
+func createUser(t *testing.T, auth *UserUseCase, email, password string) {
+	t.Helper()
+	err := auth.CreateUser(context.Background(), Account{
+		FirstName: "Иван",
+		LastName:  "Иванов",
+		Email:     email,
+		Password:  password,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -219,6 +282,48 @@ func (m *memUsers) UpdatePasswordHash(_ context.Context, id, hash string) error 
 	m.byID[id] = user
 	m.byEmail[user.Email] = user
 	return nil
+}
+
+func (m *memUsers) SetBlocked(_ context.Context, id string, blocked bool) error {
+	user, ok := m.byID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+
+	user.Blocked = blocked
+	m.byID[id] = user
+	m.byEmail[user.Email] = user
+	return nil
+}
+
+func (m *memUsers) SetAdmin(_ context.Context, id string, admin bool) error {
+	user, ok := m.byID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+
+	user.Admin = admin
+	m.byID[id] = user
+	m.byEmail[user.Email] = user
+	return nil
+}
+
+func (m *memUsers) DeleteUser(_ context.Context, id string) error {
+	user, ok := m.byID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	delete(m.byID, id)
+	delete(m.byEmail, user.Email)
+	return nil
+}
+
+func (m *memUsers) ListUsers(context.Context) ([]domain.User, error) {
+	out := make([]domain.User, 0, len(m.byID))
+	for _, user := range m.byID {
+		out = append(out, user)
+	}
+	return out, nil
 }
 
 func (m *memUsers) Count(context.Context) (int64, error) {

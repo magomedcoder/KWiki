@@ -23,43 +23,47 @@ func main() {
 		return
 	}
 
-	repoPath := flag.String("repo", "./data/wiki-content", "")
-	dbPath := flag.String("db", "./data/wiki.db", "")
+	data := flag.String("data", "./data", "")
 	addr := flag.String("addr", ":8000", "")
 	secure := flag.Bool("secure", false, "")
 	pepper := flag.String("pepper", "", "")
 	flag.Parse()
 
-	content, err := git.NewLocal(*repoPath)
+	paths := pathsFrom(*data)
+	content, err := git.NewLocal(paths.Repo)
 	if err != nil {
-		log.Fatalf("git: %v", err)
+		log.Fatalf("репозиторий: %v", err)
 	}
 
-	db, err := sqlite.Open(*dbPath)
+	db, err := sqlite.Open(paths.DB)
 	if err != nil {
-		log.Fatalf("db: %v", err)
+		log.Fatalf("база: %v", err)
 	}
 
 	hasher, err := loadHasher(*pepper)
 	if err != nil {
-		log.Fatalf("password: %v", err)
+		log.Fatalf("пароль: %v", err)
 	}
 
 	wiki := usecase.New(db, content)
 	if err := wiki.Sync(context.Background()); err != nil {
-		log.Fatalf("sync: %v", err)
+		log.Fatalf("синхронизация: %v", err)
 	}
 
 	auth := usecase.NewAuth(db, db, db, hasher)
+	if err := auth.EnsureAdmin(context.Background()); err != nil {
+		log.Fatalf("пользователи: %v", err)
+	}
+
 	if n, err := auth.UserCount(context.Background()); err != nil {
-		log.Fatalf("users: %v", err)
+		log.Fatalf("пользователи: %v", err)
 	} else if n == 0 {
-		log.Printf("нет пользователей: kwiki user add -db %s -email you@example.com", *dbPath)
+		log.Printf("нет пользователей: kwiki user add -data %s -email kwiki@example.com -name Имя -surname Фамилия", paths.Root)
 	}
 
 	views, err := html.Load("resources/templates")
 	if err != nil {
-		log.Fatalf("templates: %v", err)
+		log.Fatalf("шаблоны: %v", err)
 	}
 
 	handler := httpapi.New(wiki, auth, views, *secure)
@@ -69,7 +73,7 @@ func main() {
 	if !*secure {
 		log.Printf("куки сессии без постоянного Secure: для HTTPS укажите -secure")
 	}
-	log.Printf("KWiki запущен на %s (repo=%s, db=%s)", *addr, *repoPath, *dbPath)
+	log.Printf("KWiki запущен на %s (каталог %s)", *addr, paths.Root)
 	log.Fatal(http.ListenAndServe(*addr, handler.Protect(mux)))
 }
 

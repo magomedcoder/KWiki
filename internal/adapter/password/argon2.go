@@ -40,7 +40,7 @@ func Recommended(pepper []byte) (*Hasher, error) {
 
 func New(p Params) (*Hasher, error) {
 	if p.Memory == 0 || p.Time == 0 || p.Threads == 0 || p.SaltLen < 16 || p.KeyLen < 16 {
-		return nil, errors.New("слабые параметры argon2")
+		return nil, errors.New("слишком слабые параметры хеша пароля")
 	}
 
 	h := &Hasher{params: p}

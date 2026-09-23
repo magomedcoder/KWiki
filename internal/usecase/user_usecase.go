@@ -23,8 +23,34 @@ const (
 )
 
 type Actor struct {
+	ID    string
 	Email string
+	Name  string
+	Admin bool
 	CSRF  string
+}
+
+type Account struct {
+	FirstName string
+	LastName  string
+	Email     string
+	Password  string
+	Admin     bool
+}
+
+type ManagedUser struct {
+	Email     string
+	FirstName string
+	LastName  string
+	Admin     bool
+	Blocked   bool
+	Self      bool
+}
+
+type UsersPage struct {
+	Users  []ManagedUser
+	Error  string
+	Notice string
 }
 
 type IssuedSession struct {
@@ -61,13 +87,22 @@ func (a *UserUseCase) UserCount(ctx context.Context) (int64, error) {
 	return a.users.Count(ctx)
 }
 
-func (a *UserUseCase) CreateUser(ctx context.Context, email, password string) error {
-	normalized, err := domain.NormalizeEmail(email)
+func (a *UserUseCase) CreateUser(ctx context.Context, account Account) error {
+	firstName, err := domain.NormalizeName(account.FirstName)
+	if err != nil {
+		return err
+	}
+	lastName, err := domain.NormalizeName(account.LastName)
 	if err != nil {
 		return err
 	}
 
-	if err := domain.ValidatePassword(normalized, password); err != nil {
+	normalized, err := domain.NormalizeEmail(account.Email)
+	if err != nil {
+		return err
+	}
+
+	if err := domain.ValidatePassword(normalized, account.Password); err != nil {
 		return err
 	}
 
@@ -77,7 +112,12 @@ func (a *UserUseCase) CreateUser(ctx context.Context, email, password string) er
 		return err
 	}
 
-	hash, err := a.passwords.Hash(password)
+	count, err := a.users.Count(ctx)
+	if err != nil {
+		return err
+	}
+
+	hash, err := a.passwords.Hash(account.Password)
 	if err != nil {
 		return err
 	}
@@ -90,9 +130,118 @@ func (a *UserUseCase) CreateUser(ctx context.Context, email, password string) er
 	return a.users.Create(ctx, domain.User{
 		ID:           id,
 		Email:        normalized,
+		FirstName:    firstName,
+		LastName:     lastName,
 		PasswordHash: hash,
+		Admin:        account.Admin || count == 0,
 		CreatedAt:    a.clock(),
 	})
+}
+
+func (a *UserUseCase) ListUsers(ctx context.Context, actorID string) ([]ManagedUser, error) {
+	users, err := a.users.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ManagedUser, 0, len(users))
+	for _, user := range users {
+		out = append(out, ManagedUser{
+			Email:     user.Email,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Admin:     user.Admin,
+			Blocked:   user.Blocked,
+			Self:      actorID != "" && user.ID == actorID,
+		})
+	}
+
+	return out, nil
+}
+
+func (a *UserUseCase) DeleteUser(ctx context.Context, actorID, email string) error {
+	user, err := a.userByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+
+	if actorID != "" && actorID == user.ID {
+		return domain.ErrSelfAction
+	}
+
+	if user.Admin {
+		other, err := a.hasAnotherActiveAdmin(ctx, user.ID)
+		if err != nil {
+			return err
+		}
+
+		if !other {
+			return domain.ErrLastAdmin
+		}
+	}
+
+	if err := a.sessions.DeleteByUser(ctx, user.ID); err != nil {
+		return err
+	}
+
+	return a.users.DeleteUser(ctx, user.ID)
+}
+
+func (a *UserUseCase) SetBlocked(ctx context.Context, actorID, email string, blocked bool) error {
+	user, err := a.userByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+
+	if actorID != "" && actorID == user.ID {
+		return domain.ErrSelfAction
+	}
+
+	if blocked && user.Admin && !user.Blocked {
+		other, err := a.hasAnotherActiveAdmin(ctx, user.ID)
+		if err != nil {
+			return err
+		}
+
+		if !other {
+			return domain.ErrLastAdmin
+		}
+	}
+
+	if err := a.users.SetBlocked(ctx, user.ID, blocked); err != nil {
+		return err
+	}
+
+	if blocked {
+		return a.sessions.DeleteByUser(ctx, user.ID)
+	}
+
+	return nil
+}
+
+func (a *UserUseCase) EnsureAdmin(ctx context.Context) error {
+	users, err := a.users.ListUsers(ctx)
+	if err != nil || len(users) == 0 {
+		return err
+	}
+
+	var oldest domain.User
+	found := false
+	for _, user := range users {
+		if user.Admin {
+			return nil
+		}
+
+		if !found || user.CreatedAt.Before(oldest.CreatedAt) {
+			oldest = user
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+
+	return a.users.SetAdmin(ctx, oldest.ID, true)
 }
 
 func (a *UserUseCase) ChangePassword(ctx context.Context, email, password string) error {
@@ -225,6 +374,10 @@ func (a *UserUseCase) Login(ctx context.Context, challengeToken, csrf, email, pa
 		return IssuedSession{}, domain.ErrInvalidCredentials
 	}
 
+	if user.Blocked {
+		return IssuedSession{}, domain.ErrBlocked
+	}
+
 	if err := a.attempts.Clear(ctx, attemptKey("ip", ip)); err != nil {
 		return IssuedSession{}, err
 	}
@@ -261,7 +414,7 @@ func (a *UserUseCase) Resume(ctx context.Context, token, client string) (Actor, 
 	}
 
 	user, err := a.users.FindByID(ctx, sess.UserID)
-	if errors.Is(err, domain.ErrNotFound) {
+	if errors.Is(err, domain.ErrNotFound) || user.Blocked {
 		_ = a.sessions.Delete(ctx, sess.ID)
 		return Actor{}, domain.ErrUnauthenticated
 	}
@@ -270,9 +423,36 @@ func (a *UserUseCase) Resume(ctx context.Context, token, client string) (Actor, 
 	}
 
 	return Actor{
+		ID:    user.ID,
 		Email: user.Email,
+		Name:  user.DisplayName(),
+		Admin: user.Admin,
 		CSRF:  sess.CSRF,
 	}, nil
+}
+
+func (a *UserUseCase) userByEmail(ctx context.Context, email string) (domain.User, error) {
+	normalized, err := domain.NormalizeEmail(email)
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	return a.users.FindByEmail(ctx, normalized)
+}
+
+func (a *UserUseCase) hasAnotherActiveAdmin(ctx context.Context, exceptID string) (bool, error) {
+	users, err := a.users.ListUsers(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, user := range users {
+		if user.ID != exceptID && user.Admin && !user.Blocked {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (a *UserUseCase) Logout(ctx context.Context, token string) error {

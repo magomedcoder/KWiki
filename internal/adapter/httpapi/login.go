@@ -69,7 +69,7 @@ func (h *Handler) renderLoginError(w http.ResponseWriter, r *http.Request, reaso
 		http.Error(w, "ошибка входа", status)
 		return
 	}
-	log.Printf("login failed from %s", clientIP(r))
+	log.Printf("неудачный вход с %s", clientIP(r))
 
 	issued, err := h.auth.BeginLogin(r.Context(), "", clientHint(r))
 	if err != nil {
@@ -92,6 +92,8 @@ func loginFailure(err error) (string, int) {
 		return "Слишком много попыток. Повторите позже.", http.StatusTooManyRequests
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		return "Неверная почта или пароль.", http.StatusUnauthorized
+	case errors.Is(err, domain.ErrBlocked):
+		return "Учётная запись заблокирована.", http.StatusForbidden
 	case errors.Is(err, domain.ErrCSRF):
 		return "Сессия формы истекла. Отправьте её ещё раз.", http.StatusBadRequest
 	default:

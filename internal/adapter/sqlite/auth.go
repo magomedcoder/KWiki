@@ -20,7 +20,11 @@ var (
 type userRow struct {
 	ID           string `gorm:"primaryKey;size:32"`
 	Email        string `gorm:"uniqueIndex;size:254"`
+	FirstName    string `gorm:"size:80"`
+	LastName     string `gorm:"size:80"`
 	PasswordHash string `gorm:"size:512"`
+	Admin        bool
+	Blocked      bool
 	CreatedAt    time.Time
 }
 
@@ -55,7 +59,11 @@ func (r *Repository) Create(ctx context.Context, user domain.User) error {
 	err := r.db.WithContext(ctx).Create(&userRow{
 		ID:           user.ID,
 		Email:        user.Email,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
 		PasswordHash: user.PasswordHash,
+		Admin:        user.Admin,
+		Blocked:      user.Blocked,
 		CreatedAt:    user.CreatedAt,
 	}).Error
 	if err != nil && (errors.Is(err, gorm.ErrDuplicatedKey) || strings.Contains(err.Error(), "UNIQUE")) {
@@ -104,6 +112,64 @@ func (r *Repository) UpdatePasswordHash(ctx context.Context, id, hash string) er
 	}
 
 	return nil
+}
+
+func (r *Repository) SetBlocked(ctx context.Context, id string, blocked bool) error {
+	return r.updateUserFlag(ctx, id, "blocked", blocked)
+}
+
+func (r *Repository) SetAdmin(ctx context.Context, id string, admin bool) error {
+	return r.updateUserFlag(ctx, id, "admin", admin)
+}
+
+func (r *Repository) updateUserFlag(ctx context.Context, id, column string, value bool) error {
+	res := r.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", id).Update(column, value)
+	if res.Error != nil {
+		return res.Error
+	}
+
+	if res.RowsAffected > 0 {
+		return nil
+	}
+
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", id).Count(&n).Error; err != nil {
+		return err
+	}
+
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *Repository) DeleteUser(ctx context.Context, id string) error {
+	res := r.db.WithContext(ctx).Delete(&userRow{}, "id = ?", id)
+	if res.Error != nil {
+		return res.Error
+	}
+
+	if res.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *Repository) ListUsers(ctx context.Context) ([]domain.User, error) {
+	var rows []userRow
+	err := r.db.WithContext(ctx).Order("last_name ASC, first_name ASC, email ASC").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	users := make([]domain.User, 0, len(rows))
+	for _, row := range rows {
+		users = append(users, toUser(row))
+	}
+
+	return users, nil
 }
 
 func (r *Repository) Count(ctx context.Context) (int64, error) {
@@ -200,7 +266,11 @@ func toUser(row userRow) domain.User {
 	return domain.User{
 		ID:           row.ID,
 		Email:        row.Email,
+		FirstName:    row.FirstName,
+		LastName:     row.LastName,
 		PasswordHash: row.PasswordHash,
+		Admin:        row.Admin,
+		Blocked:      row.Blocked,
 		CreatedAt:    row.CreatedAt,
 	}
 }

@@ -36,9 +36,11 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "/login?next=") {
 		t.Fatalf("status %d location %q", rec.Code, rec.Header().Get("Location"))
 	}
+
 	if rec.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatalf("frame header %q", rec.Header().Get("X-Frame-Options"))
 	}
+
 	if rec.Header().Get("Strict-Transport-Security") == "" {
 		t.Fatal("missing HSTS")
 	}
@@ -51,10 +53,12 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 	if len(cookies) != 1 {
 		t.Fatalf("cookies %d", len(cookies))
 	}
+
 	c := cookies[0]
 	if c.Name != "__Host-kwiki_session" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie %+v", c)
 	}
+
 	if !strings.Contains(view.login.CSRF, "csrf-token") {
 		t.Fatalf("login page %+v", view.login)
 	}
@@ -79,12 +83,16 @@ func TestEditRequiresCSRF(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/edit", strings.NewReader("slug=home&content=text"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: "kwiki_session", Value: "session-token"})
+	req.AddCookie(&http.Cookie{
+		Name:  "kwiki_session",
+		Value: "session-token",
+	})
 	rec := httptest.NewRecorder()
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status %d", rec.Code)
 	}
+
 	if wiki.saved {
 		t.Fatal("page was saved without csrf")
 	}
@@ -105,13 +113,18 @@ type stubWiki struct {
 	saved bool
 }
 
-func (stubWiki) ListPages(context.Context) ([]domain.Page, error) { return nil, nil }
+func (stubWiki) ListPages(context.Context) ([]domain.Page, error) {
+	return nil, nil
+}
+
 func (stubWiki) ViewPage(context.Context, string) (usecase.PageView, error) {
 	return usecase.PageView{}, nil
 }
+
 func (stubWiki) EditForm(context.Context, string) (usecase.EditForm, error) {
 	return usecase.EditForm{}, nil
 }
+
 func (s *stubWiki) SavePage(context.Context, string, string) (string, error) {
 	s.saved = true
 	return "home", nil
@@ -126,24 +139,50 @@ type stubAuth struct {
 func (s *stubAuth) BeginLogin(context.Context, string, string) (usecase.IssuedSession, error) {
 	return s.begin, nil
 }
+
 func (s *stubAuth) Login(context.Context, string, string, string, string, string, string) (usecase.IssuedSession, error) {
 	return s.issued, nil
 }
+
 func (s *stubAuth) Resume(context.Context, string, string) (usecase.Actor, error) {
 	if s.actor.Email == "" {
 		return usecase.Actor{}, domain.ErrUnauthenticated
 	}
 	return s.actor, nil
 }
-func (s *stubAuth) Logout(context.Context, string) error { return nil }
+
+func (s *stubAuth) Logout(context.Context, string) error {
+	return nil
+}
+
+func (s *stubAuth) CreateUser(context.Context, usecase.Account) error {
+	return nil
+}
+
+func (s *stubAuth) ListUsers(context.Context, string) ([]usecase.ManagedUser, error) {
+	return nil, nil
+}
+
+func (s *stubAuth) DeleteUser(context.Context, string, string) error {
+	return nil
+}
+
+func (s *stubAuth) SetBlocked(context.Context, string, string, bool) error {
+	return nil
+}
 
 type stubView struct {
 	login usecase.LoginPage
 }
 
-func (stubView) Index(http.ResponseWriter, []domain.Page, usecase.Actor)   {}
+func (stubView) Index(http.ResponseWriter, []domain.Page, usecase.Actor) {}
+
 func (stubView) Page(http.ResponseWriter, usecase.PageView, usecase.Actor) {}
+
 func (stubView) Edit(http.ResponseWriter, usecase.EditForm, usecase.Actor) {}
+
+func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor) {}
+
 func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
 	s.login = page
 }

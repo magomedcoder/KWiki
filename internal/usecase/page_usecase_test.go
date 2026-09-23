@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/magomedcoder/kwiki/internal/domain"
@@ -21,7 +22,7 @@ func TestSaveAndViewPage(t *testing.T) {
 	if slug != "guides/intro" {
 		t.Fatalf("slug = %q", slug)
 	}
-	if content.messages[0] != "create: guides/intro" {
+	if content.messages[0] != "создание: руководства/введение" {
 		t.Fatalf("message = %q", content.messages[0])
 	}
 
@@ -39,7 +40,7 @@ func TestSaveAndViewPage(t *testing.T) {
 	if _, err := svc.SavePage(ctx, "guides/intro", "# Ещё"); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
-	if content.messages[1] != "edit: guides/intro" {
+	if content.messages[1] != "правка: guides/intro" {
 		t.Fatalf("message = %q", content.messages[1])
 	}
 }
@@ -101,11 +102,11 @@ func (m *memPages) List(context.Context) ([]domain.Page, error) {
 
 func (m *memPages) Revisions(_ context.Context, slug string, limit int) ([]domain.Revision, error) {
 	var out []domain.Revision
-	for i := len(m.revs) - 1; i >= 0; i-- {
-		if m.revs[i].Slug != slug {
+	for _, v := range slices.Backward(m.revs) {
+		if v.Slug != slug {
 			continue
 		}
-		out = append(out, m.revs[i])
+		out = append(out, v)
 		if limit > 0 && len(out) >= limit {
 			break
 		}

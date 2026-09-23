@@ -1,0 +1,77 @@
+{{define "content"}}
+<h1>Пользователи</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Notice}}<p class="notice">{{.Notice}}</p>{{end}}
+
+<h2>Новый пользователь</h2>
+<form method="POST" action="/users" class="editor">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create">
+  <label>
+    Имя
+    <input type="text" name="first_name" required maxlength="80" autocomplete="off">
+  </label>
+  <label>
+    Фамилия
+    <input type="text" name="last_name" required maxlength="80" autocomplete="off">
+  </label>
+  <label>
+    Почта
+    <input type="email" name="email" required autocomplete="off">
+  </label>
+  <label>
+    Пароль
+    <input type="password" name="password" required autocomplete="new-password">
+  </label>
+  <label class="check">
+    <input type="checkbox" name="admin" value="1">
+    Администратор
+  </label>
+  <div class="actions">
+    <button type="submit">Создать</button>
+  </div>
+</form>
+
+<table class="users">
+  <thead>
+    <tr>
+      <th>Имя</th>
+      <th>Почта</th>
+      <th>Статус</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Users}}
+    <tr>
+      <td>{{.FirstName}} {{.LastName}}</td>
+      <td>{{.Email}}</td>
+      <td>
+        {{if .Admin}}администратор{{end}}
+        {{if .Blocked}}заблокирован{{end}}
+      </td>
+      <td class="row-actions">
+        {{if .Self}}
+        <span>это вы</span>
+        {{else}}
+        <form method="POST" action="/users">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="email" value="{{.Email}}">
+          {{if .Blocked}}
+          <button type="submit" name="action" value="unblock">Разблокировать</button>
+          {{else}}
+          <button type="submit" name="action" value="block">Заблокировать</button>
+          {{end}}
+        </form>
+        <form method="POST" action="/users">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="email" value="{{.Email}}">
+          <button type="submit" name="action" value="delete">Удалить</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

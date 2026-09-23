@@ -3,7 +3,7 @@ package domain
 import "errors"
 
 var (
-	ErrInvalidSlug        = errors.New("некорректный слаг")
+	ErrInvalidSlug        = errors.New("некорректный адрес страницы")
 	ErrNotFound           = errors.New("не найдено")
 	ErrInvalidEmail       = errors.New("некорректная почта")
 	ErrWeakPassword       = errors.New("пароль должен быть 12-128 символов и содержать минимум три класса: строчные, прописные, цифры, знаки")
@@ -12,4 +12,8 @@ var (
 	ErrTooManyAttempts    = errors.New("слишком много попыток")
 	ErrUnauthenticated    = errors.New("требуется вход")
 	ErrCSRF               = errors.New("некорректный запрос")
+	ErrInvalidName        = errors.New("укажите имя и фамилию")
+	ErrBlocked            = errors.New("учётная запись заблокирована")
+	ErrLastAdmin          = errors.New("нельзя удалить или заблокировать последнего администратора")
+	ErrSelfAction         = errors.New("нельзя изменить свою учётную запись")
 )

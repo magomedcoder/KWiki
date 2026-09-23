@@ -2,7 +2,6 @@ package markdown
 
 import (
 	"html"
-	"html/template"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,7 +16,7 @@ var (
 	reLink     = regexp.MustCompile(`\[([^\]]+)\]\(([^)\s]+)\)`)
 )
 
-func Convert(src []byte) template.HTML {
+func HTML(src []byte) string {
 	lines := strings.Split(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n")
 
 	var out strings.Builder
@@ -97,7 +96,7 @@ func Convert(src []byte) template.HTML {
 		out.WriteString("</code></pre>\n")
 	}
 
-	return template.HTML(out.String())
+	return out.String()
 }
 
 func inline(s string) string {

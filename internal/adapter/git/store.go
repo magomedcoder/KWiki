@@ -1,7 +1,8 @@
-package gitstore
+package git
 
 import (
-	"errors" // добавляем импорт errors для errors.Is
+	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,8 +10,9 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing" // импорт пакета plumbing
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/magomedcoder/kwiki/internal/domain"
 )
 
 type Store struct {
@@ -18,11 +20,7 @@ type Store struct {
 	root string
 }
 
-type File struct {
-	Path string
-	Hash string
-	Size int64
-}
+var _ domain.ContentRepository = (*Store)(nil)
 
 func NewLocal(path string) (*Store, error) {
 	abs, err := filepath.Abs(path)
@@ -35,12 +33,11 @@ func NewLocal(path string) (*Store, error) {
 	}
 
 	repo, err := git.PlainOpen(abs)
-	if err == git.ErrRepositoryNotExists {
+	if errors.Is(err, git.ErrRepositoryNotExists) {
 		repo, err = git.PlainInit(abs, false)
 		if err != nil {
 			return nil, err
 		}
-
 		if err := ensureInitialCommit(repo, abs); err != nil {
 			return nil, err
 		}
@@ -48,10 +45,7 @@ func NewLocal(path string) (*Store, error) {
 		return nil, err
 	}
 
-	return &Store{
-		repo: repo,
-		root: abs,
-	}, nil
+	return &Store{repo: repo, root: abs}, nil
 }
 
 func ensureInitialCommit(repo *git.Repository, root string) error {
@@ -71,7 +65,6 @@ func ensureInitialCommit(repo *git.Repository, root string) error {
 		if err := os.WriteFile(keep, []byte{}, 0o644); err != nil {
 			return err
 		}
-
 		if _, err := wt.Add(".gitkeep"); err != nil {
 			return err
 		}
@@ -84,34 +77,23 @@ func ensureInitialCommit(repo *git.Repository, root string) error {
 			When:  time.Now(),
 		},
 	})
-
 	return err
 }
 
-func (s *Store) headTree() (*object.Tree, error) {
-	ref, err := s.repo.Head()
-	if err != nil {
+func (s *Store) ListMarkdown(ctx context.Context) ([]domain.ContentFile, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	commit, err := s.repo.CommitObject(ref.Hash())
-	if err != nil {
-		return nil, err
-	}
-
-	return commit.Tree()
-}
-
-func (s *Store) ListMarkdown() ([]File, error) {
 	tree, err := s.headTree()
 	if err != nil {
 		return nil, err
 	}
 
-	var files []File
+	var files []domain.ContentFile
 	err = tree.Files().ForEach(func(f *object.File) error {
 		if strings.HasSuffix(f.Name, ".md") {
-			files = append(files, File{
+			files = append(files, domain.ContentFile{
 				Path: f.Name,
 				Hash: f.Hash.String(),
 				Size: f.Size,
@@ -119,17 +101,24 @@ func (s *Store) ListMarkdown() ([]File, error) {
 		}
 		return nil
 	})
-
 	return files, err
 }
 
-func (s *Store) ReadFile(path string) ([]byte, error) {
+func (s *Store) Read(ctx context.Context, path string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	tree, err := s.headTree()
 	if err != nil {
 		return nil, err
 	}
 
 	f, err := tree.File(path)
+	if errors.Is(err, object.ErrFileNotFound) {
+		return nil, domain.ErrNotFound
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -143,42 +132,11 @@ func (s *Store) ReadFile(path string) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-func (s *Store) History(path string, limit int) ([]*object.Commit, error) {
-	ref, err := s.repo.Head()
-	if err != nil {
-		return nil, err
+func (s *Store) Write(ctx context.Context, relPath string, content []byte, message string) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	iter, err := s.repo.Log(&git.LogOptions{From: ref.Hash()})
-	if err != nil {
-		return nil, err
-	}
-
-	var out []*object.Commit
-	err = iter.ForEach(func(c *object.Commit) error {
-		tree, err := c.Tree()
-		if err != nil {
-			return nil
-		}
-
-		if _, err := tree.File(path); err == nil {
-			out = append(out, c)
-		}
-
-		if limit > 0 && len(out) >= limit {
-			return io.EOF
-		}
-
-		return nil
-	})
-	if err == io.EOF {
-		err = nil
-	}
-
-	return out, err
-}
-
-func (s *Store) WriteFile(relPath string, content []byte, message string) error {
 	wt, err := s.repo.Worktree()
 	if err != nil {
 		return err
@@ -204,6 +162,19 @@ func (s *Store) WriteFile(relPath string, content []byte, message string) error 
 			When:  time.Now(),
 		},
 	})
-
 	return err
+}
+
+func (s *Store) headTree() (*object.Tree, error) {
+	ref, err := s.repo.Head()
+	if err != nil {
+		return nil, err
+	}
+
+	commit, err := s.repo.CommitObject(ref.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	return commit.Tree()
 }

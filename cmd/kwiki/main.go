@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"github.com/magomedcoder/kwiki/internal/db"
-	"github.com/magomedcoder/kwiki/internal/gitstore"
-	"github.com/magomedcoder/kwiki/internal/handlers"
-	"github.com/magomedcoder/kwiki/internal/render"
 	"log"
 	"net/http"
+
+	"github.com/magomedcoder/kwiki/internal/adapter/git"
+	"github.com/magomedcoder/kwiki/internal/adapter/html"
+	"github.com/magomedcoder/kwiki/internal/adapter/httpapi"
+	"github.com/magomedcoder/kwiki/internal/adapter/sqlite"
+	"github.com/magomedcoder/kwiki/internal/usecase"
 )
 
 func main() {
@@ -16,26 +19,30 @@ func main() {
 	addr := flag.String("addr", ":8000", "")
 	flag.Parse()
 
-	store, err := gitstore.NewLocal(*repoPath)
+	content, err := git.NewLocal(*repoPath)
 	if err != nil {
 		log.Fatalf("git: %v", err)
 	}
 
-	database, err := db.Open(*dbPath)
+	pages, err := sqlite.Open(*dbPath)
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
 
-	if err := db.SyncIndex(database, store); err != nil {
+	wiki := usecase.New(pages, content)
+	if err := wiki.Sync(context.Background()); err != nil {
 		log.Fatalf("sync: %v", err)
 	}
 
-	render.LoadTemplates("resources/templates")
+	views, err := html.Load("resources/templates")
+	if err != nil {
+		log.Fatalf("templates: %v", err)
+	}
 
-	h := handlers.New(store, database)
-	http.HandleFunc("/", h.Index)
-	http.HandleFunc("/edit", h.Edit)
+	handler := httpapi.New(wiki, views)
+	mux := http.NewServeMux()
+	handler.Register(mux)
 
 	log.Printf("KWiki запущен на %s (repo=%s, db=%s)", *addr, *repoPath, *dbPath)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	log.Fatal(http.ListenAndServe(*addr, mux))
 }

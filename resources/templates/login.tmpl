@@ -1,0 +1,32 @@
+{{define "content"}}
+<h1>Вход</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<form method="POST" action="/login" class="editor">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="next" value="{{.Next}}">
+  <label>
+    Почта
+    <input
+      type="email"
+      name="email"
+      value="{{.Value}}"
+      autocomplete="username"
+      spellcheck="false"
+      required
+      autofocus
+    >
+  </label>
+  <label>
+    Пароль
+    <input
+      type="password"
+      name="password"
+      autocomplete="current-password"
+      required
+    >
+  </label>
+  <div class="actions">
+    <button type="submit">Войти</button>
+  </div>
+</form>
+{{end}}

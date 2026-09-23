@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
 type Repository struct {
@@ -50,12 +52,18 @@ func Open(path string) (*Repository, error) {
 		return nil, err
 	}
 
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+		}),
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.AutoMigrate(&pageRow{}, &revisionRow{}); err != nil {
+	if err := db.AutoMigrate(&pageRow{}, &revisionRow{}, &userRow{}, &sessionRow{}, &attemptRow{}); err != nil {
 		return nil, err
 	}
 

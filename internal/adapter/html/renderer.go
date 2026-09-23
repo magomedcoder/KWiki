@@ -19,15 +19,22 @@ type Renderer struct {
 	index *template.Template
 	page  *template.Template
 	edit  *template.Template
+	login *template.Template
+}
+
+type shell struct {
+	Title string
+	Email string
+	CSRF  string
 }
 
 type indexData struct {
-	Title string
+	shell
 	Pages []domain.Page
 }
 
 type pageData struct {
-	Title     string
+	shell
 	Slug      string
 	Body      template.HTML
 	Revisions []domain.Revision
@@ -35,10 +42,17 @@ type pageData struct {
 }
 
 type editData struct {
-	Title   string
+	shell
 	Slug    string
 	Content string
 	IsNew   bool
+}
+
+type loginData struct {
+	shell
+	Error string
+	Next  string
+	Value string
 }
 
 func Load(dir string) (*Renderer, error) {
@@ -57,28 +71,34 @@ func Load(dir string) (*Renderer, error) {
 		return nil, err
 	}
 
+	login, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "login.tmpl"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Renderer{
 		index: index,
 		page:  page,
 		edit:  edit,
+		login: login,
 	}, nil
 }
 
-func (r *Renderer) Index(w http.ResponseWriter, pages []domain.Page) {
+func (r *Renderer) Index(w http.ResponseWriter, pages []domain.Page, actor usecase.Actor) {
 	exec(w, r.index, indexData{
-		Title: "KWiki",
+		shell: shell{Title: "KWiki", Email: actor.Email, CSRF: actor.CSRF},
 		Pages: pages,
 	})
 }
 
-func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageView) {
+func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageView, actor usecase.Actor) {
 	var body template.HTML
 	if !view.Missing {
 		body = template.HTML(markdown.HTML([]byte(view.Markdown)))
 	}
 
 	exec(w, r.page, pageData{
-		Title:     view.Title,
+		shell:     shell{Title: view.Title, Email: actor.Email, CSRF: actor.CSRF},
 		Slug:      view.Slug,
 		Body:      body,
 		Revisions: view.Revisions,
@@ -86,17 +106,26 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageView) {
 	})
 }
 
-func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm) {
+func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, actor usecase.Actor) {
 	title := "Новая страница"
 	if !form.IsNew {
 		title = "Редактирование: " + form.Slug
 	}
 
 	exec(w, r.edit, editData{
-		Title:   title,
+		shell:   shell{Title: title, Email: actor.Email, CSRF: actor.CSRF},
 		Slug:    form.Slug,
 		Content: form.Content,
 		IsNew:   form.IsNew,
+	})
+}
+
+func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
+	exec(w, r.login, loginData{
+		shell: shell{Title: "Вход", CSRF: page.CSRF},
+		Error: page.Error,
+		Next:  page.Next,
+		Value: page.Email,
 	})
 }
 

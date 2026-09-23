@@ -21,27 +21,49 @@ type Wiki interface {
 	SavePage(ctx context.Context, slug, content string) (string, error)
 }
 
+type Auth interface {
+	BeginLogin(ctx context.Context, previousToken, client string) (usecase.IssuedSession, error)
+
+	Login(ctx context.Context, challengeToken, csrf, email, password, ip, client string) (usecase.IssuedSession, error)
+
+	Resume(ctx context.Context, token, client string) (usecase.Actor, error)
+
+	Logout(ctx context.Context, token string) error
+}
+
 type View interface {
-	Index(w http.ResponseWriter, pages []domain.Page)
-	Page(w http.ResponseWriter, view usecase.PageView)
-	Edit(w http.ResponseWriter, form usecase.EditForm)
+	Index(w http.ResponseWriter, pages []domain.Page, actor usecase.Actor)
+
+	Page(w http.ResponseWriter, view usecase.PageView, actor usecase.Actor)
+
+	Edit(w http.ResponseWriter, form usecase.EditForm, actor usecase.Actor)
+
+	Login(w http.ResponseWriter, page usecase.LoginPage)
 }
 
 type Handler struct {
-	wiki Wiki
-	view View
+	wiki       Wiki
+	auth       Auth
+	view       View
+	secure     bool
+	cookieName string
 }
 
-func New(wiki Wiki, view View) *Handler {
+func New(wiki Wiki, auth Auth, view View, secure bool) *Handler {
 	return &Handler{
-		wiki: wiki,
-		view: view,
+		wiki:       wiki,
+		auth:       auth,
+		view:       view,
+		secure:     secure,
+		cookieName: cookieName(secure),
 	}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("/", h.index)
-	mux.HandleFunc("/edit", h.edit)
+	mux.HandleFunc("/login", h.login)
+	mux.Handle("/logout", h.requireAuth(http.HandlerFunc(h.logout)))
+	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
+	mux.Handle("/", h.requireAuth(http.HandlerFunc(h.index)))
 }
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +77,7 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.view.Index(w, pages)
+	h.view.Index(w, pages, actorFrom(r))
 }
 
 func (h *Handler) viewPage(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +93,7 @@ func (h *Handler) viewPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.Page(w, view)
+	h.view.Page(w, view, actorFrom(r))
 }
 
 func (h *Handler) edit(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +119,7 @@ func (h *Handler) editForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.view.Edit(w, form)
+	h.view.Edit(w, form, actorFrom(r))
 }
 
 func (h *Handler) savePage(w http.ResponseWriter, r *http.Request) {

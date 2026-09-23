@@ -1,0 +1,35 @@
+{{define "title"}}
+<h1 class="mt-0 mb-3.5 border-b border-wiki-line pb-1 font-serif text-[1.85rem] leading-tight font-normal max-md:text-[1.55rem]">{{.}}</h1>
+{{end}}
+
+{{define "section"}}
+<h2 class="mt-6 mb-2 border-b border-wiki-line pb-0.5 font-serif text-[1.35rem] leading-snug font-normal">{{.}}</h2>
+{{end}}
+
+{{define "error"}}
+{{if .}}<p class="mb-4 rounded-sm border border-wiki-danger-line bg-wiki-danger-bg px-3 py-2.5 text-wiki-danger">{{.}}</p>{{end}}
+{{end}}
+
+{{define "notice"}}
+{{if .}}<p class="mb-4 rounded-sm border border-wiki-ok-line bg-wiki-ok-bg px-3 py-2.5 text-wiki-ok">{{.}}</p>{{end}}
+{{end}}
+
+{{define "code"}}
+<code class="rounded-sm bg-[#f0f1f3] px-1 font-mono text-[0.88em]">{{.}}</code>
+{{end}}
+
+{{define "prose"}}
+<div class="{{.Class}} content prose prose-neutral max-w-none font-serif text-[1.05rem] leading-relaxed text-wiki-ink prose-headings:font-serif prose-headings:font-normal prose-headings:text-wiki-ink prose-p:text-wiki-ink prose-li:text-wiki-ink prose-a:text-wiki-link prose-a:underline prose-a:underline-offset-2 prose-strong:text-wiki-ink prose-code:rounded-sm prose-code:bg-[#f0f1f3] prose-code:px-1 prose-code:py-px prose-code:font-normal prose-code:text-wiki-ink prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-sm prose-pre:border prose-pre:border-[#eaecf0] prose-pre:bg-wiki-well prose-pre:text-wiki-ink prose-h1:mb-3 prose-h1:border-b prose-h1:border-wiki-line prose-h1:pb-1 prose-h1:text-[1.85rem] prose-h2:mt-6 prose-h2:mb-2 prose-h2:border-b prose-h2:border-wiki-line prose-h2:pb-0.5 prose-h2:text-[1.35rem]">{{.Body}}</div>
+{{end}}
+
+{{define "index-link"}}
+<li class="border-b border-[#eaecf0]"><a class="block py-2.5 underline-offset-2" href="{{.Href}}">{{.Name}}</a></li>
+{{end}}
+
+{{define "revision"}}
+<li class="grid grid-cols-1 gap-x-3 gap-y-0.5 border-b border-[#eaecf0] py-2 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
+    <code class="rounded-sm bg-[#f0f1f3] px-1 font-mono text-[0.88em] break-all">{{.Hash}}</code>
+    <span class="min-w-0 break-words">{{.Message}}</span>
+    <time class="text-[0.85rem] text-wiki-faint md:col-span-2" datetime="{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.CreatedAt.Format "02.01.2006 15:04"}}</time>
+</li>
+{{end}}

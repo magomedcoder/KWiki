@@ -23,11 +23,11 @@ func TestEditShowsLivePreview(t *testing.T) {
 	}, nil, usecase.Actor{CSRF: "token"})
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "<h1>Привет</h1>") || !strings.Contains(body, "<strong>жирный</strong>") {
+	if !strings.Contains(body, `id="привет"`) || !strings.Contains(body, ">Привет</h1>") || !strings.Contains(body, "<strong>жирный</strong>") {
 		t.Fatalf("нет просмотра: %s", body)
 	}
 
-	if !strings.Contains(body, `src="/static/main.js"`) || !strings.Contains(body, `href="/static/main.css"`) || !strings.Contains(body, "Просмотр") {
+	if !strings.Contains(body, `src="/js/main.js"`) || !strings.Contains(body, `href="/css/tailwindcss.css"`) || !strings.Contains(body, "Просмотр") {
 		t.Fatalf("нет элементов редактора")
 	}
 }

@@ -1,0 +1,38 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@source "../templates";
+@source "../js/main.js";
+@source "../../internal/adapter/html/renderer.go";
+@source not "./tailwindcss.css";
+
+@theme {
+  --color-wiki-bg: #f4f5f7;
+  --color-wiki-ink: #202122;
+  --color-wiki-muted: #54595d;
+  --color-wiki-faint: #72777d;
+  --color-wiki-line: #a2a9b1;
+  --color-wiki-line-soft: #c8ccd1;
+  --color-wiki-well: #f8f9fa;
+  --color-wiki-link: #3d4c5c;
+  --color-wiki-danger-bg: #f3ecec;
+  --color-wiki-danger: #4a3333;
+  --color-wiki-danger-line: #d2c0c0;
+  --color-wiki-ok-bg: #eef1ee;
+  --color-wiki-ok: #2f3b2f;
+  --color-wiki-ok-line: #c3cfc3;
+  --font-serif: Georgia, "Times New Roman", Times, serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  ::selection {
+    background-color: #d9dde3;
+    color: var(--color-wiki-ink);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    scroll-margin-top: 4.5rem;
+  }
+}

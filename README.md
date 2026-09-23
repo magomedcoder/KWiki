@@ -5,6 +5,7 @@
 ## Сборка
 
 ```bash
+yarn build:css
 go build -o build/kwiki ./cmd/kwiki
 ```
 

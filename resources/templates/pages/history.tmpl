@@ -1,0 +1,17 @@
+{{define "content"}}
+{{if .Email}}
+  {{template "tabs" (list (dict "Label" "Читать" "Href" .ReadHref) (dict "Label" "Править" "Href" .EditHref) (dict "Label" "История" "Current" true))}}
+{{else}}
+  {{template "tabs" (list (dict "Label" "Читать" "Href" .ReadHref) (dict "Label" "История" "Current" true))}}
+{{end}}
+{{template "title" .Title}}
+{{if .Revisions}}
+<ul class="m-0 list-none p-0">
+  {{range .Revisions}}
+    {{template "revision" .}}
+  {{end}}
+</ul>
+{{else}}
+<p class="text-wiki-muted">Правок пока нет.</p>
+{{end}}
+{{end}}

@@ -1,9 +1,11 @@
 package usecase
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -37,6 +39,13 @@ type BranchView struct {
 	Public  bool
 	Current bool
 	Href    string
+	Pages   []PageLink
+}
+
+type PageLink struct {
+	Title   string
+	Href    string
+	Current bool
 }
 
 type IndexView struct {
@@ -51,11 +60,14 @@ type IndexView struct {
 
 type PageScreen struct {
 	PageView
-	EditHref  string
-	Canonical string
-	Indexable bool
-	Home      bool
-	Branches  []BranchView
+	EditHref    string
+	ReadHref    string
+	HistoryHref string
+	Canonical   string
+	Indexable   bool
+	Home        bool
+	Branches    []BranchView
+	Pages       []PageLink
 }
 
 type BranchesPage struct {
@@ -187,6 +199,32 @@ func (p *PageUseCase) VisibleBranches(ctx context.Context, authenticated bool) (
 	}
 
 	return out, nil
+}
+
+func PageLinks(branch, home string, pages []domain.Page, current string) []PageLink {
+	out := make([]PageLink, 0, len(pages))
+	for _, page := range pages {
+		href := domain.PagePath(branch, page.Slug)
+		if home != "" && page.Slug == home {
+			href = domain.PagePath(branch, "")
+		}
+
+		title := page.Title
+		if title == "" {
+			title = domain.TitleFromSlug(page.Slug)
+		}
+
+		out = append(out, PageLink{
+			Title:   title,
+			Href:    href,
+			Current: current != "" && page.Slug == current,
+		})
+	}
+
+	slices.SortFunc(out, func(a, b PageLink) int {
+		return cmp.Compare(a.Title, b.Title)
+	})
+	return out
 }
 
 func BranchLinks(branches []domain.Branch, current string) []BranchView {

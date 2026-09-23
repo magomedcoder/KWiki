@@ -50,7 +50,15 @@ func PagePath(branch, slug string) string {
 	return "/b/" + branch + "/" + slug
 }
 
+func HistoryPath(branch, slug string) string {
+	return queryPath("/history", branch, slug)
+}
+
 func EditPath(branch, slug string) string {
+	return queryPath("/edit", branch, slug)
+}
+
+func queryPath(base, branch, slug string) string {
 	values := url.Values{}
 	if branch != "" && branch != DefaultBranch {
 		values.Set("branch", branch)
@@ -61,8 +69,8 @@ func EditPath(branch, slug string) string {
 	}
 
 	if len(values) == 0 {
-		return "/edit"
+		return base
 	}
 
-	return "/edit?" + values.Encode()
+	return base + "?" + values.Encode()
 }

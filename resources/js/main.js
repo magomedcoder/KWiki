@@ -57,7 +57,7 @@
       const mode = button.getAttribute("data-mode");
       split.setAttribute("data-mode", mode);
       form.querySelectorAll(".editor-modes button").forEach(function (item) {
-        item.classList.toggle("is-active", item === button);
+        item.toggleAttribute("data-active", item === button);
       });
       if (mode === "preview") {
         refresh();

@@ -21,6 +21,8 @@ type Wiki interface {
 
 	ViewPage(ctx context.Context, branch, slug string) (usecase.PageView, error)
 
+	ListPages(ctx context.Context, branch string) ([]domain.Page, error)
+
 	EditForm(ctx context.Context, branch, slug string) (usecase.EditForm, error)
 
 	SavePage(ctx context.Context, branch, slug, content string) (string, error)
@@ -66,6 +68,10 @@ type View interface {
 	Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor)
 
 	Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor)
+
+	History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor)
+
+	NotFound(w http.ResponseWriter, actor usecase.Actor)
 }
 
 type Handler struct {
@@ -101,8 +107,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("/branches", h.requireAuth(http.HandlerFunc(h.branches)))
 	mux.Handle("/logout", h.requireAuth(http.HandlerFunc(h.logout)))
 	mux.Handle("/edit/preview", h.requireAuth(http.HandlerFunc(h.previewEdit)))
-	mux.HandleFunc("/static/", h.staticFile)
+	mux.HandleFunc("/css/", h.asset)
+	mux.HandleFunc("/js/", h.asset)
 	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
+	mux.Handle("/history", h.optionalAuth(http.HandlerFunc(h.history)))
 	mux.Handle("/", h.optionalAuth(http.HandlerFunc(h.wikiPage)))
 }
 
@@ -114,8 +122,7 @@ func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 
 	branchName, slug, ok := splitWikiPath(r.URL.Path)
 	if !ok {
-		markIndexable(w, false)
-		http.Error(w, "страница не найдена", http.StatusNotFound)
+		h.notFound(w, r)
 		return
 	}
 
@@ -129,8 +136,7 @@ func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 
 	branch, err := h.wiki.OpenBranch(r.Context(), branchName)
 	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
-		markIndexable(w, false)
-		http.Error(w, "ветка не найдена", http.StatusNotFound)
+		h.notFound(w, r)
 		return
 	}
 	if err != nil {
@@ -177,22 +183,41 @@ func (h *Handler) publicCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	links := usecase.BranchLinks(branches, "")
+	for i, branch := range branches {
+		pages, err := h.pageLinks(r.Context(), branch.Name, "")
+		if err != nil {
+			log.Printf("список страниц: %v", err)
+			http.Error(w, "не удалось загрузить страницы", http.StatusInternalServerError)
+			return
+		}
+		links[i].Pages = pages
+	}
+
 	markIndexable(w, true)
 	h.view.Index(w, usecase.IndexView{
-		Title:       "Публичные ветки",
-		Description: "Публичные ветки вики",
+		Title:       "Публичные страницы",
+		Description: "Публичные страницы вики",
 		Catalog:     true,
-		Branches:    usecase.BranchLinks(branches, ""),
+		Branches:    links,
 		Canonical:   h.absolute(r, "/"),
 		Indexable:   true,
 	}, usecase.Actor{})
 }
 
+func (h *Handler) pageLinks(ctx context.Context, branch, current string) ([]usecase.PageLink, error) {
+	pages, err := h.wiki.ListPages(ctx, branch)
+	if err != nil {
+		return nil, err
+	}
+
+	return usecase.PageLinks(branch, h.home, pages, current), nil
+}
+
 func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain.Branch, slug string, home bool) {
 	view, err := h.wiki.ViewPage(r.Context(), branch.Name, slug)
 	if errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrNotFound) {
-		markIndexable(w, false)
-		http.Error(w, "страница не найдена", http.StatusNotFound)
+		h.notFound(w, r)
 		return
 	}
 	if err != nil {
@@ -203,8 +228,7 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 
 	actor := actorFrom(r)
 	if view.Missing && actor.Email == "" {
-		markIndexable(w, false)
-		http.Error(w, "страница не найдена", http.StatusNotFound)
+		h.notFound(w, r)
 		return
 	}
 
@@ -228,18 +252,87 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 		path = domain.PagePath(branch.Name, "")
 	}
 
+	pages, err := h.pageLinks(r.Context(), branch.Name, view.Slug)
+	if err != nil {
+		log.Printf("список страниц: %v", err)
+		http.Error(w, "не удалось открыть страницу", http.StatusInternalServerError)
+		return
+	}
+
 	screen := usecase.PageScreen{
-		PageView:  view,
-		EditHref:  domain.EditPath(branch.Name, view.Slug),
-		Indexable: indexable,
-		Home:      home,
-		Branches:  usecase.BranchLinks(branches, branch.Name),
+		PageView:    view,
+		EditHref:    domain.EditPath(branch.Name, view.Slug),
+		ReadHref:    path,
+		HistoryHref: domain.HistoryPath(branch.Name, view.Slug),
+		Indexable:   indexable,
+		Home:        home,
+		Branches:    usecase.BranchLinks(branches, branch.Name),
+		Pages:       pages,
 	}
 	if indexable {
 		screen.Canonical = h.absolute(r, path)
 	}
 
 	h.view.Page(w, screen, actor)
+}
+
+func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	slug := strings.TrimSpace(r.URL.Query().Get("slug"))
+	if slug == "" {
+		slug = h.home
+	}
+
+	branch, err := h.wiki.OpenBranch(r.Context(), requestedBranch(r))
+	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
+		h.notFound(w, r)
+		return
+	}
+
+	if err != nil {
+		log.Printf("ветка: %v", err)
+		http.Error(w, "не удалось открыть историю", http.StatusInternalServerError)
+		return
+	}
+
+	actor := actorFrom(r)
+	if !branch.Public && actor.Email == "" {
+		h.denyPrivate(w, r)
+		return
+	}
+
+	view, err := h.wiki.ViewPage(r.Context(), branch.Name, slug)
+	if errors.Is(err, domain.ErrInvalidSlug) || errors.Is(err, domain.ErrNotFound) || view.Missing {
+		h.notFound(w, r)
+		return
+	}
+	if err != nil {
+		log.Printf("история страницы: %v", err)
+		http.Error(w, "не удалось открыть историю", http.StatusInternalServerError)
+		return
+	}
+
+	read := domain.PagePath(branch.Name, view.Slug)
+	if view.Slug == h.home {
+		read = domain.PagePath(branch.Name, "")
+	}
+
+	markIndexable(w, false)
+	h.view.History(w, usecase.PageScreen{
+		PageView:    view,
+		EditHref:    domain.EditPath(branch.Name, view.Slug),
+		ReadHref:    read,
+		HistoryHref: domain.HistoryPath(branch.Name, view.Slug),
+	}, actor)
+}
+
+func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
+	markIndexable(w, false)
+	h.view.NotFound(w, actorFrom(r))
 }
 
 func (h *Handler) denyPrivate(w http.ResponseWriter, r *http.Request) {
@@ -257,15 +350,15 @@ func (h *Handler) previewEdit(w http.ResponseWriter, r *http.Request) {
 	h.view.Preview(w, r.FormValue("content"))
 }
 
-func (h *Handler) staticFile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
 		return
 	}
 
 	name, ok := map[string]string{
-		"/static/main.css": "resources/static/main.css",
-		"/static/main.js":  "resources/static/main.js",
+		"/css/tailwindcss.css": "resources/css/tailwindcss.css",
+		"/js/main.js":          "resources/js/main.js",
 	}[r.URL.Path]
 	if !ok {
 		markIndexable(w, false)
@@ -294,7 +387,7 @@ func (h *Handler) editForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
-		http.Error(w, "ветка не найдена", http.StatusNotFound)
+		h.notFound(w, r)
 		return
 	}
 	if err != nil {

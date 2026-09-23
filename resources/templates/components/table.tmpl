@@ -1,0 +1,39 @@
+{{define "table-start"}}
+<div class="mt-5">
+<table class="w-full border-collapse text-sm max-md:block">
+    <thead class="max-md:sr-only">
+        <tr>
+{{end}}
+
+{{define "th"}}
+            <th class="border border-wiki-line-soft bg-[#eaecf0] px-2 py-2 text-left font-semibold">{{.}}</th>
+{{end}}
+
+{{define "table-body"}}
+        </tr>
+    </thead>
+    <tbody class="max-md:block">
+{{end}}
+
+{{define "table-end"}}
+    </tbody>
+</table>
+</div>
+{{end}}
+
+{{define "tr-start"}}
+        <tr class="max-md:block max-md:border-b max-md:border-wiki-line-soft max-md:py-2">
+{{end}}
+
+{{define "tr-end"}}
+        </tr>
+{{end}}
+
+{{define "td-start"}}
+            <td class="border border-wiki-line-soft px-2 py-2 align-middle max-md:block max-md:w-full max-md:border-0 max-md:px-0 max-md:py-1">
+                <span class="mb-0.5 hidden text-xs tracking-wide text-wiki-faint uppercase max-md:block">{{.}}</span>
+{{end}}
+
+{{define "td-end"}}
+            </td>
+{{end}}

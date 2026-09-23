@@ -1,0 +1,26 @@
+{{define "sidebar"}}
+<nav class="wiki-toc max-md:fixed max-md:top-24 max-md:bottom-0 max-md:left-0 max-md:z-40 max-md:w-[min(18rem,86vw)] max-md:-translate-x-[105%] max-md:overflow-auto max-md:border-r max-md:border-wiki-line max-md:bg-white max-md:px-3 max-md:pt-3 max-md:pb-5 max-md:transition-transform max-md:group-has-[.nav-toggle:checked]:translate-x-0 motion-reduce:transition-none md:sticky md:top-13 md:h-[calc(100vh-3.25rem)] md:overflow-auto md:border-r md:border-wiki-line-soft md:bg-wiki-bg md:px-3 md:py-4 print:hidden" id="wiki-nav" aria-label="Содержание">
+    <p class="mb-1 px-2.5 text-xs tracking-wider text-wiki-faint uppercase">Содержание</p>
+    <ul class="m-0 list-none p-0">
+        {{range .Headings}}
+        <li>
+            {{if eq .Level 2}}
+            <a class="block rounded-sm py-1.5 ps-5 pe-2.5 text-sm text-wiki-ink no-underline hover:bg-[#eaecf0] hover:underline hover:underline-offset-2" href="#{{.ID}}">{{.Text}}</a>
+            {{else if eq .Level 3}}
+            <a class="block rounded-sm py-1.5 ps-8 pe-2.5 text-sm text-wiki-ink no-underline hover:bg-[#eaecf0] hover:underline hover:underline-offset-2" href="#{{.ID}}">{{.Text}}</a>
+            {{else if gt .Level 3}}
+            <a class="block rounded-sm py-1.5 ps-10 pe-2.5 text-sm text-wiki-ink no-underline hover:bg-[#eaecf0] hover:underline hover:underline-offset-2" href="#{{.ID}}">{{.Text}}</a>
+            {{else}}
+            <a class="block rounded-sm py-1.5 ps-2.5 pe-2.5 text-sm text-wiki-ink no-underline hover:bg-[#eaecf0] hover:underline hover:underline-offset-2" href="#{{.ID}}">{{.Text}}</a>
+            {{end}}
+        </li>
+        {{end}}
+    </ul>
+</nav>
+{{end}}
+
+{{define "footer"}}
+<footer class="mt-auto border-t border-wiki-line-soft px-4 py-3 ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] md:px-8 print:hidden">
+    <a class="text-sm text-wiki-faint no-underline hover:text-wiki-ink hover:underline" href="{{.Home}}">KWiki</a>
+</footer>
+{{end}}

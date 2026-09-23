@@ -1,0 +1,45 @@
+{{define "content"}}
+{{template "title" "Ветки"}}
+{{template "error" .Error}}
+{{template "notice" .Notice}}
+
+<p class="mb-4">Публичная ветка открыта без входа и попадает в карту сайта. Приватная видна только после входа.</p>
+
+{{template "section" "Новая ветка"}}
+<form method="POST" action="/branches">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create">
+  {{template "field" (dict "Label" "Имя" "Type" "text" "Name" "name" "Required" true "Max" 32 "Placeholder" "например: docs" "Autocomplete" "off")}}
+  {{template "check" (dict "Name" "public" "Value" "1" "Label" "Публичная")}}
+  {{template "actions-start"}}
+    {{template "button" (dict "Type" "submit" "Label" "Создать")}}
+  {{template "actions-end"}}
+</form>
+
+{{template "table-start"}}
+    {{template "th" "Имя"}}
+    {{template "th" "Доступ"}}
+    {{template "th" "Действия"}}
+{{template "table-body"}}
+    {{range .Branches}}
+    {{template "tr-start"}}
+        {{template "td-start" "Имя"}}<a href="{{if eq .Name "main"}}/{{else}}/b/{{.Name}}{{end}}">{{.Name}}</a>{{template "td-end"}}
+        {{template "td-start" "Доступ"}}{{if .Public}}публичная{{else}}приватная{{end}}{{template "td-end"}}
+        {{template "td-start" "Действия"}}
+            <form method="POST" action="/branches" class="m-0 flex flex-wrap items-center gap-1.5">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="name" value="{{.Name}}">
+              {{if .Public}}
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "private" "Label" "Сделать приватной")}}
+              {{else}}
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "public" "Label" "Сделать публичной")}}
+              {{end}}
+              {{if ne .Name "main"}}
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "delete" "Label" "Удалить")}}
+              {{end}}
+            </form>
+        {{template "td-end"}}
+    {{template "tr-end"}}
+    {{end}}
+{{template "table-end"}}
+{{end}}

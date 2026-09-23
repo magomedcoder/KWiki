@@ -1,0 +1,58 @@
+{{define "content"}}
+{{template "title" "Пользователи"}}
+{{template "error" .Error}}
+{{template "notice" .Notice}}
+
+{{template "section" "Новый пользователь"}}
+<form method="POST" action="/users">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create">
+  <div class="grid items-start gap-x-8 md:grid-cols-2">
+  {{template "field" (dict "Label" "Имя" "Type" "text" "Name" "first_name" "Required" true "Max" 80 "Autocomplete" "off")}}
+  {{template "field" (dict "Label" "Фамилия" "Type" "text" "Name" "last_name" "Required" true "Max" 80 "Autocomplete" "off")}}
+  {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Required" true "Autocomplete" "off")}}
+  {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "new-password")}}
+  </div>
+  {{template "check" (dict "Name" "admin" "Value" "1" "Label" "Администратор")}}
+  {{template "actions-start"}}
+    {{template "button" (dict "Type" "submit" "Label" "Создать")}}
+  {{template "actions-end"}}
+</form>
+
+{{template "table-start"}}
+    {{template "th" "Имя"}}
+    {{template "th" "Почта"}}
+    {{template "th" "Статус"}}
+    {{template "th" "Действия"}}
+{{template "table-body"}}
+    {{range .Users}}
+    {{template "tr-start"}}
+        {{template "td-start" "Имя"}}{{.FirstName}} {{.LastName}}{{template "td-end"}}
+        {{template "td-start" "Почта"}}{{.Email}}{{template "td-end"}}
+        {{template "td-start" "Статус"}}{{if .Admin}}администратор{{end}}{{if .Blocked}}заблокирован{{end}}{{template "td-end"}}
+        {{template "td-start" "Действия"}}
+            <div class="flex flex-wrap items-center gap-1.5">
+            {{if .Self}}
+            <span>это вы</span>
+            {{else}}
+            <form method="POST" action="/users" class="m-0">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="email" value="{{.Email}}">
+              {{if .Blocked}}
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "unblock" "Label" "Разблокировать")}}
+              {{else}}
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "block" "Label" "Заблокировать")}}
+              {{end}}
+            </form>
+            <form method="POST" action="/users" class="m-0">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="email" value="{{.Email}}">
+              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "delete" "Label" "Удалить")}}
+            </form>
+            {{end}}
+            </div>
+        {{template "td-end"}}
+    {{template "tr-end"}}
+    {{end}}
+{{template "table-end"}}
+{{end}}

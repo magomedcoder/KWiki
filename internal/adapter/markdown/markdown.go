@@ -16,11 +16,24 @@ var (
 	reLink     = regexp.MustCompile(`\[([^\]]+)\]\(([^)\s]+)\)`)
 )
 
+type Heading struct {
+	Level int
+	ID    string
+	Text  string
+}
+
 func HTML(src []byte) string {
+	body, _ := Document(src)
+	return body
+}
+
+func Document(src []byte) (string, []Heading) {
 	lines := strings.Split(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n")
 
 	var out strings.Builder
 	var para []string
+	var headings []Heading
+	used := map[string]int{}
 	inCode := false
 	inList := false
 
@@ -62,10 +75,12 @@ func HTML(src []byte) string {
 			flushPara()
 			closeList()
 			level := len(m[1])
-			tag := "h" + strconv.Itoa(level)
-			out.WriteString("<" + tag + ">")
+			text := plainText(m[2])
+			id := anchorID(text, used)
+			headings = append(headings, Heading{Level: level, ID: id, Text: text})
+			out.WriteString("<h" + strconv.Itoa(level) + ` id="` + html.EscapeString(id) + `">`)
 			out.WriteString(inline(m[2]))
-			out.WriteString("</" + tag + ">\n")
+			out.WriteString("</h" + strconv.Itoa(level) + ">\n")
 			continue
 		}
 
@@ -96,7 +111,32 @@ func HTML(src []byte) string {
 		out.WriteString("</code></pre>\n")
 	}
 
-	return out.String()
+	return out.String(), headings
+}
+
+var reSlug = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
+func plainText(s string) string {
+	s = reCode.ReplaceAllString(s, "$1")
+	s = reBold.ReplaceAllString(s, "$1")
+	s = reItalic.ReplaceAllString(s, "$1")
+	s = reLink.ReplaceAllString(s, "$1")
+
+	return strings.TrimSpace(s)
+}
+
+func anchorID(text string, used map[string]int) string {
+	id := strings.ToLower(strings.Trim(reSlug.ReplaceAllString(text, "-"), "-"))
+	if id == "" {
+		id = "section"
+	}
+
+	used[id]++
+	if used[id] == 1 {
+		return id
+	}
+
+	return id + "-" + strconv.Itoa(used[id])
 }
 
 func inline(s string) string {

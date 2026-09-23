@@ -1,0 +1,15 @@
+{{define "content"}}
+{{template "title" "Вход"}}
+{{template "error" .Error}}
+<form method="POST" action="/login">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="next" value="{{.Next}}">
+  <div class="grid items-start gap-x-8 md:grid-cols-2">
+  {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Value" .Value "Required" true "Autocomplete" "username" "Autofocus" true "Spellcheck" false)}}
+  {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "current-password")}}
+  </div>
+  {{template "actions-start"}}
+    {{template "button" (dict "Type" "submit" "Label" "Войти")}}
+  {{template "actions-end"}}
+</form>
+{{end}}

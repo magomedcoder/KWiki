@@ -1,0 +1,25 @@
+{{define "header"}}
+<header class="sticky top-0 z-50 flex min-h-13 flex-wrap items-center gap-x-3 gap-y-2 border-b border-wiki-line bg-white py-1.5 ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] print:hidden">
+    {{if .Headings}}
+    <label class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 text-sm text-wiki-ink md:hidden" for="nav-open">Меню</label>
+    {{end}}
+    <a class="font-serif text-[1.7rem] leading-none tracking-wide text-wiki-ink no-underline hover:text-wiki-ink hover:no-underline max-md:text-2xl" href="{{.Home}}">KWiki</a>
+    {{if .Email}}
+    <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="Навигация">
+        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.Home}}">Страницы</a>
+        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.NewHref}}">Новая страница</a>
+        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/branches">Ветки</a>{{end}}
+        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/users">Пользователи</a>{{end}}
+        <span class="max-w-40 truncate text-wiki-muted">{{.Name}}</span>
+        {{template "logout" .}}
+    </nav>
+    {{end}}
+</header>
+{{end}}
+
+{{define "logout"}}
+<form method="POST" action="/logout" class="m-0">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button class="cursor-pointer border-0 bg-transparent p-0 text-wiki-link underline underline-offset-2 hover:text-wiki-ink" type="submit">Выйти</button>
+</form>
+{{end}}

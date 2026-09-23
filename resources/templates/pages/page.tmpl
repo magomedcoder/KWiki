@@ -1,0 +1,22 @@
+{{define "content"}}
+<article>
+  {{if .Email}}
+    {{if .Missing}}
+      {{template "tabs" (list (dict "Label" "Создать" "Href" .EditHref "Current" true))}}
+    {{else}}
+      {{template "tabs" (list (dict "Label" "Читать" "Current" true) (dict "Label" "Править" "Href" .EditHref))}}
+    {{end}}
+  {{end}}
+
+  {{if not .IsHome}}<h1 id="page-title" class="mt-0 mb-3.5 border-b border-wiki-line pb-1 font-serif text-[1.85rem] leading-tight font-normal max-md:text-[1.55rem]">{{.Title}}</h1>{{end}}
+
+  {{if .Missing}}
+    <p class="text-wiki-muted">Страницы {{template "code" .Slug}} ещё нет.</p>
+  {{else}}
+    {{template "prose" (dict "Body" .Body)}}
+    {{if .HistoryHref}}
+    <p class="mt-6 flex justify-end print:hidden"><a class="text-sm text-wiki-faint no-underline underline-offset-2 hover:text-wiki-ink hover:underline" href="{{.HistoryHref}}">История</a></p>
+    {{end}}
+  {{end}}
+</article>
+{{end}}

@@ -146,6 +146,26 @@ func (stubWiki) ViewPage(_ context.Context, branch, slug string) (usecase.PageVi
 		Branch:   branch,
 		Markdown: "Текст страницы",
 		Public:   branch == "docs",
+		Missing:  slug == "gone",
+	}, nil
+}
+
+func (stubWiki) ListPages(_ context.Context, branch string) ([]domain.Page, error) {
+	if branch != "docs" {
+		return nil, nil
+	}
+
+	return []domain.Page{
+		{
+			Branch: branch,
+			Slug:   "README",
+			Title:  "Обзор",
+		},
+		{
+			Branch: branch,
+			Slug:   "intro",
+			Title:  "Введение",
+		},
 	}, nil
 }
 
@@ -241,6 +261,14 @@ func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor) {}
 
 func (stubView) Branches(http.ResponseWriter, usecase.BranchesPage, usecase.Actor) {}
 
+func (stubView) NotFound(w http.ResponseWriter, _ usecase.Actor) {
+	w.WriteHeader(http.StatusNotFound)
+}
+
+func (s *stubView) History(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor) {
+	s.page = view
+}
+
 func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
 	s.login = page
 }
@@ -269,6 +297,50 @@ func TestEditPreviewRequiresCSRF(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || view.previewed != "# Hi" {
 		t.Fatalf("код %d просмотр %q", rec.Code, view.previewed)
+	}
+}
+
+func TestHistoryPage(t *testing.T) {
+	view := &stubView{}
+	h := New(&stubWiki{}, &stubAuth{}, view, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+	srv := h.Protect(mux)
+
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history?branch=docs&slug=intro", nil))
+	if rec.Code != http.StatusOK || view.page.Slug != "intro" || view.page.ReadHref != "/b/docs/intro" || view.page.HistoryHref != "/history?branch=docs&slug=intro" {
+		t.Fatalf("код %d страница %+v", rec.Code, view.page)
+	}
+
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history?slug=intro", nil))
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/login?next=") {
+		t.Fatalf("приватная история %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history?branch=docs&slug=gone", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("пустая история, код %d", rec.Code)
+	}
+}
+
+func TestMissingPublicPageIsNotFound(t *testing.T) {
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/docs/gone", nil))
+	if rec.Code != http.StatusNotFound || strings.Contains(rec.Header().Get("Location"), "/login") {
+		t.Fatalf("код %d адрес %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	rec = httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("пустой адрес ветки, код %d", rec.Code)
 	}
 }
 
@@ -306,12 +378,20 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 		t.Fatalf("страница %+v", view.page)
 	}
 
+	if !publicPageListed(view.page.Pages, "/b/docs/intro", true) || !publicPageListed(view.page.Pages, "/b/docs", false) {
+		t.Fatalf("страницы публичной ветки %+v", view.page.Pages)
+	}
+
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !view.index.Catalog || !view.index.Indexable {
 		t.Fatalf("каталог, код %d вид %+v", rec.Code, view.index)
+	}
+
+	if len(view.index.Branches) != 1 || view.index.Branches[0].Name != "docs" || !publicPageListed(view.index.Branches[0].Pages, "/b/docs/intro", false) {
+		t.Fatalf("каталог страниц %+v", view.index.Branches)
 	}
 
 	rec = httptest.NewRecorder()
@@ -331,7 +411,7 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	body := rec.Body.String()
-	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") {
+	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") || !strings.Contains(body, "Disallow: /history") {
 		t.Fatalf("файл роботов %s", body)
 	}
 
@@ -340,6 +420,22 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/intro" {
 		t.Fatalf("перенаправление %d %q", rec.Code, rec.Header().Get("Location"))
 	}
+
+	rec = httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/intro", nil))
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/login?next=") {
+		t.Fatalf("приватная страница %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func publicPageListed(pages []usecase.PageLink, href string, current bool) bool {
+	for _, page := range pages {
+		if page.Href == href && page.Current == current {
+			return true
+		}
+	}
+
+	return false
 }
 
 func TestBranchRootShowsHomeFile(t *testing.T) {

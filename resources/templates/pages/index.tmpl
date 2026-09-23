@@ -1,0 +1,17 @@
+{{define "content"}}
+{{template "title" .Title}}
+<ul class="m-0 list-none p-0">
+    {{range .Branches}}
+    <li class="border-b border-[#eaecf0]">
+        <a class="block py-2.5 underline-offset-2" href="{{.Href}}">{{.Name}}</a>
+        {{if .Pages}}
+        <ul class="m-0 mb-2 list-none p-0 ps-4">
+            {{range .Pages}}
+            <li><a class="block py-1.5 underline-offset-2" href="{{.Href}}">{{.Title}}</a></li>
+            {{end}}
+        </ul>
+        {{end}}
+    </li>
+    {{end}}
+</ul>
+{{end}}

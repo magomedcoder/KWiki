@@ -1,0 +1,49 @@
+{{define "label-start"}}
+<label class="my-3.5 flex flex-col gap-1.5 text-sm text-wiki-muted">
+{{.}}
+{{end}}
+
+{{define "label-end"}}
+</label>
+{{end}}
+
+{{define "field"}}
+{{template "label-start" .Label}}
+<input
+    class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink read-only:bg-wiki-well read-only:text-wiki-muted focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3]"
+    type="{{.Type}}"
+    {{if .Name}}name="{{.Name}}"{{end}}
+    {{if .Value}}value="{{.Value}}"{{end}}
+    {{if .Required}}required{{end}}
+    {{if .Readonly}}readonly{{end}}
+    {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
+    {{if .Autocomplete}}autocomplete="{{.Autocomplete}}"{{end}}
+    {{if .Max}}maxlength="{{.Max}}"{{end}}
+    {{if .Autofocus}}autofocus{{end}}
+    {{if eq .Spellcheck false}}spellcheck="false"{{end}}
+>
+{{template "label-end"}}
+{{end}}
+
+{{define "check"}}
+<label class="my-3.5 flex flex-row items-center gap-2 text-base text-wiki-ink">
+    <input class="size-4" type="checkbox" name="{{.Name}}" value="{{.Value}}">
+    {{.Label}}
+</label>
+{{end}}
+
+{{define "button"}}
+<button class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 py-1.5 text-sm text-wiki-ink hover:border-wiki-muted hover:bg-white data-active:border-wiki-muted data-active:bg-white data-active:font-semibold" type="{{.Type}}"{{if .Name}} name="{{.Name}}"{{end}}{{if .Value}} value="{{.Value}}"{{end}}{{if .Before}} data-before="{{.Before}}"{{end}}{{if .After}} data-after="{{.After}}"{{end}}{{if .Placeholder}} data-placeholder="{{.Placeholder}}"{{end}}{{if .Mode}} data-mode="{{.Mode}}"{{end}}{{if .Active}} data-active{{end}}>{{.Label}}</button>
+{{end}}
+
+{{define "text-link"}}
+<a class="px-1 py-2 underline-offset-2" href="{{.Href}}">{{.Label}}</a>
+{{end}}
+
+{{define "actions-start"}}
+<div class="mt-4 flex flex-wrap items-center gap-2">
+{{end}}
+
+{{define "actions-end"}}
+</div>
+{{end}}

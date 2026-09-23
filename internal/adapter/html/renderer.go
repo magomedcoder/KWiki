@@ -2,6 +2,7 @@ package html
 
 import (
 	"bytes"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -24,6 +25,8 @@ type Renderer struct {
 	login    *template.Template
 	users    *template.Template
 	branches *template.Template
+	notFound *template.Template
+	history  *template.Template
 }
 
 type shell struct {
@@ -38,6 +41,7 @@ type shell struct {
 	Canonical   string
 	Description string
 	Modified    string
+	Headings    []markdown.Heading
 }
 
 type indexData struct {
@@ -48,13 +52,14 @@ type indexData struct {
 
 type pageData struct {
 	shell
-	Slug      string
-	Body      template.HTML
-	Revisions []domain.Revision
-	Missing   bool
-	EditHref  string
-	Home      bool
-	Branches  []usecase.BranchView
+	Slug        string
+	Body        template.HTML
+	Revisions   []domain.Revision
+	Missing     bool
+	EditHref    string
+	HistoryHref string
+	IsHome      bool
+	Branches    []usecase.BranchView
 }
 
 type editData struct {
@@ -68,6 +73,13 @@ type editData struct {
 	Cancel   string
 }
 
+type historyData struct {
+	shell
+	Revisions []domain.Revision
+	EditHref  string
+	ReadHref  string
+}
+
 type loginData struct {
 	shell
 	Error string
@@ -75,33 +87,82 @@ type loginData struct {
 	Value string
 }
 
+var templateFuncs = template.FuncMap{
+	"dict": dict,
+	"list": list,
+}
+
+func dict(values ...any) (map[string]any, error) {
+	if len(values)%2 != 0 {
+		return nil, errors.New("dict: нечётное число аргументов")
+	}
+
+	out := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].(string)
+		if !ok {
+			return nil, errors.New("dict: ключ не строка")
+		}
+		out[key] = values[i+1]
+	}
+
+	return out, nil
+}
+
+func list(values ...any) []any {
+	return values
+}
+
+func parsePage(dir, page string) (*template.Template, error) {
+	components, err := filepath.Glob(filepath.Join(dir, "components", "*.tmpl"))
+	if err != nil {
+		return nil, err
+	}
+
+	files := append([]string{
+		filepath.Join(dir, "layout.tmpl"),
+		filepath.Join(dir, "pages", page),
+	}, components...)
+	return template.New("layout.tmpl").Funcs(templateFuncs).Option("missingkey=zero").ParseFiles(files...)
+}
+
 func Load(dir string) (*Renderer, error) {
-	index, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "index.tmpl"))
+	index, err := parsePage(dir, "index.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	page, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "page.tmpl"))
+	page, err := parsePage(dir, "page.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	edit, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "edit.tmpl"))
+	edit, err := parsePage(dir, "edit.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	login, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "login.tmpl"))
+	login, err := parsePage(dir, "login.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	users, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "users.tmpl"))
+	users, err := parsePage(dir, "users.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	branches, err := template.ParseFiles(filepath.Join(dir, "layout.tmpl"), filepath.Join(dir, "branches.tmpl"))
+	branches, err := parsePage(dir, "branches.tmpl")
+	if err != nil {
+		return nil, err
+	}
+
+	notFound, err := parsePage(dir, "notfound.tmpl")
+	if err != nil {
+		return nil, err
+	}
+
+	history, err := parsePage(dir, "history.tmpl")
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +174,8 @@ func Load(dir string) (*Renderer, error) {
 		login:    login,
 		users:    users,
 		branches: branches,
+		notFound: notFound,
+		history:  history,
 	}, nil
 }
 
@@ -146,8 +209,18 @@ func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor us
 
 func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor) {
 	var body template.HTML
+	var headings []markdown.Heading
 	if !view.Missing {
-		body = template.HTML(markdown.HTML([]byte(view.Markdown)))
+		rendered, found := markdown.Document([]byte(view.Markdown))
+		body = template.HTML(rendered)
+		headings = found
+		if !view.Home && strings.TrimSpace(view.Title) != "" {
+			headings = append([]markdown.Heading{{
+				Level: 1,
+				ID:    "page-title",
+				Text:  view.Title,
+			}}, headings...)
+		}
 	}
 
 	frame := actorShell(view.Title, actor)
@@ -156,20 +229,48 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 	frame.Description = view.Description
 	frame.Home = domain.PagePath(view.Branch, "")
 	frame.NewHref = domain.EditPath(view.Branch, "")
+	frame.Headings = headings
 	if !view.UpdatedAt.IsZero() {
 		frame.Modified = view.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 
 	exec(w, r.page, pageData{
-		shell:     frame,
-		Slug:      view.Slug,
-		Body:      body,
-		Revisions: view.Revisions,
-		Missing:   view.Missing,
-		EditHref:  view.EditHref,
-		Home:      view.Home,
-		Branches:  view.Branches,
+		shell:       frame,
+		Slug:        view.Slug,
+		Body:        body,
+		Revisions:   view.Revisions,
+		Missing:     view.Missing,
+		EditHref:    view.EditHref,
+		HistoryHref: view.HistoryHref,
+		IsHome:      view.Home,
+		Branches:    view.Branches,
 	})
+}
+
+func (r *Renderer) History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor) {
+	frame := actorShell("История: "+view.Title, actor)
+	frame.Home = domain.PagePath(view.Branch, "")
+	frame.NewHref = domain.EditPath(view.Branch, "")
+	exec(w, r.history, historyData{
+		shell:     frame,
+		Revisions: view.Revisions,
+		EditHref:  view.EditHref,
+		ReadHref:  view.ReadHref,
+	})
+}
+
+func (r *Renderer) NotFound(w http.ResponseWriter, actor usecase.Actor) {
+	frame := actorShell("Страница не найдена", actor)
+	var buf bytes.Buffer
+	if err := r.notFound.ExecuteTemplate(&buf, "layout.tmpl", frame); err != nil {
+		http.Error(w, "ошибка шаблона", http.StatusInternalServerError)
+		log.Printf("ошибка шаблона: %v", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte(minifyHTML(buf.String())))
 }
 
 func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor) {
@@ -203,7 +304,7 @@ func (r *Renderer) Preview(w http.ResponseWriter, content string) {
 
 func previewHTML(content string) template.HTML {
 	if strings.TrimSpace(content) == "" {
-		return `<p class="preview-empty">Начните писать, и здесь появится страница.</p>`
+		return `<p class="m-0 text-wiki-faint">Начните писать, и здесь появится страница.</p>`
 	}
 
 	return template.HTML(markdown.HTML([]byte(content)))

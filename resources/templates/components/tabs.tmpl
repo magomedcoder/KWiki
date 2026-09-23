@@ -1,0 +1,15 @@
+{{define "tabs"}}
+<nav class="mb-4 flex flex-wrap border-b border-wiki-line print:hidden" aria-label="Действия со страницей">
+    {{range .}}
+    {{if .Current}}
+        {{if .Href}}
+        <a class="-mb-px border border-wiki-line border-b-white bg-white px-3.5 py-1.5 text-sm font-semibold text-wiki-ink no-underline" href="{{.Href}}">{{.Label}}</a>
+        {{else}}
+        <span class="-mb-px border border-wiki-line border-b-white bg-white px-3.5 py-1.5 text-sm font-semibold text-wiki-ink">{{.Label}}</span>
+        {{end}}
+    {{else}}
+        <a class="-mb-px border border-transparent px-3.5 py-1.5 text-sm text-wiki-link no-underline hover:underline hover:underline-offset-2" href="{{.Href}}">{{.Label}}</a>
+    {{end}}
+    {{end}}
+</nav>
+{{end}}

@@ -1,0 +1,57 @@
+{{define "content"}}
+{{template "tabs" (list (dict "Label" "Читать" "Href" .Cancel) (dict "Label" "Править" "Current" true))}}
+{{template "title" .Title}}
+<form method="POST" action="/edit" class="editor">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  {{if .IsNew}}
+  {{template "label-start" "Ветка"}}
+    <select class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3]" name="branch">
+      {{range .Branches}}
+      <option value="{{.Name}}" {{if eq .Name $.Branch}}selected{{end}}>{{.Name}}{{if not .Public}} (приватная){{end}}</option>
+      {{end}}
+    </select>
+  {{template "label-end"}}
+  {{else}}
+  <input type="hidden" name="branch" value="{{.Branch}}">
+  {{template "field" (dict "Label" "Ветка" "Type" "text" "Value" .Branch "Readonly" true)}}
+  {{end}}
+  {{template "field" (dict "Label" "Адрес" "Type" "text" "Name" "slug" "Value" .Slug "Required" true "Readonly" (not .IsNew))}}
+
+  <div class="editor-split group mt-4" data-mode="edit">
+    <div class="flex flex-wrap items-center justify-between gap-1.5">
+      <div class="editor-tools flex flex-wrap gap-1.5 group-data-[mode=preview]:hidden">
+        {{template "button" (dict "Type" "button" "Label" "Жирный" "Before" "**" "After" "**" "Placeholder" "текст")}}
+        {{template "button" (dict "Type" "button" "Label" "Курсив" "Before" "*" "After" "*" "Placeholder" "текст")}}
+        {{template "button" (dict "Type" "button" "Label" "Заголовок" "Before" "# " "Placeholder" "Заголовок")}}
+        {{template "button" (dict "Type" "button" "Label" "Список" "Before" "- " "Placeholder" "пункт")}}
+        {{template "button" (dict "Type" "button" "Label" "Код" "Before" "`" "After" "`" "Placeholder" "код")}}
+        {{template "button" (dict "Type" "button" "Label" "Ссылка" "Before" "[" "After" "](адрес)" "Placeholder" "ссылка")}}
+      </div>
+      <div class="editor-modes ms-auto flex flex-wrap gap-1.5">
+        {{template "button" (dict "Type" "button" "Label" "Правка" "Mode" "edit" "Active" true)}}
+        {{template "button" (dict "Type" "button" "Label" "Просмотр" "Mode" "preview")}}
+      </div>
+    </div>
+
+    <label class="editor-source my-3.5 flex flex-col gap-1.5 text-sm text-wiki-muted group-data-[mode=preview]:hidden">
+      Текст
+      <textarea
+        class="h-72 w-full resize-y rounded-sm border border-wiki-line bg-white px-2.5 py-2 font-mono text-sm leading-snug text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3] max-md:h-56"
+        name="content"
+        rows="24"
+        spellcheck="false"
+        required
+      >{{.Content}}</textarea>
+    </label>
+    <section class="preview mt-3 hidden min-h-64 flex-col rounded-sm border border-wiki-line-soft bg-wiki-well p-4 group-data-[mode=preview]:flex" aria-live="polite">
+      {{template "prose" (dict "Class" "preview-body flex-1" "Body" .Preview)}}
+    </section>
+  </div>
+
+  {{template "actions-start"}}
+    {{template "button" (dict "Type" "submit" "Label" "Сохранить")}}
+    {{template "text-link" (dict "Href" .Cancel "Label" "Отмена")}}
+  {{template "actions-end"}}
+</form>
+<script src="/js/main.js"></script>
+{{end}}

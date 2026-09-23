@@ -278,6 +278,13 @@ func (a *UserUseCase) BeginLogin(ctx context.Context, previousToken, client stri
 	}
 	if previousToken != "" {
 		old, err := a.sessions.Find(ctx, hashToken(previousToken))
+		if err == nil && old.UserID == "" && old.ExpiresAt.After(now) && old.ClientHash == clientHash(client) {
+			return IssuedSession{
+				Token:     previousToken,
+				CSRF:      old.CSRF,
+				ExpiresAt: old.ExpiresAt,
+			}, nil
+		}
 		if err == nil && old.UserID == "" {
 			if err := a.sessions.Delete(ctx, old.ID); err != nil {
 				return IssuedSession{}, err

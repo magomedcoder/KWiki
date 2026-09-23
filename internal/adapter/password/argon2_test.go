@@ -22,12 +22,12 @@ func TestArgon2RoundTrip(t *testing.T) {
 
 	ok, err := h.Verify("S3cure-Wiki-Pass", encoded)
 	if err != nil || !ok {
-		t.Fatalf("verify ok=%v err=%v", ok, err)
+		t.Fatalf("проверка, верно=%v ошибка=%v", ok, err)
 	}
 
 	ok, err = h.Verify("wrong-password", encoded)
 	if err != nil || ok {
-		t.Fatalf("wrong ok=%v err=%v", ok, err)
+		t.Fatalf("неверный, верно=%v ошибка=%v", ok, err)
 	}
 
 	other, err := New(Params{
@@ -44,6 +44,6 @@ func TestArgon2RoundTrip(t *testing.T) {
 
 	ok, err = other.Verify("S3cure-Wiki-Pass", encoded)
 	if err != nil || ok {
-		t.Fatalf("pepper mismatch ok=%v err=%v", ok, err)
+		t.Fatalf("секрет не совпал, верно=%v ошибка=%v", ok, err)
 	}
 }

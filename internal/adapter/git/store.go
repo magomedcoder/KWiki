@@ -74,7 +74,7 @@ func ensureInitialCommit(repo *git.Repository, root string) error {
 
 	_, err = wt.Commit("начальный коммит", &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "kwiki",
+			Name:  "система",
 			Email: "kwiki@localhost",
 			When:  time.Now(),
 		},
@@ -295,7 +295,7 @@ func (s *Store) writeFile(wt *git.Worktree, rel string, content []byte) error {
 func (s *Store) commit(wt *git.Worktree, message string) error {
 	_, err := wt.Commit(message, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "kwiki",
+			Name:  "система",
 			Email: "kwiki@localhost",
 			When:  time.Now(),
 		},

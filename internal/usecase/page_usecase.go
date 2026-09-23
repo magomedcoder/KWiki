@@ -428,7 +428,7 @@ func (p *PageUseCase) syncBranch(ctx context.Context, branch string) error {
 
 func describe(markdown string) string {
 	var b strings.Builder
-	for _, line := range strings.Split(markdown, "\n") {
+	for line := range strings.SplitSeq(markdown, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "```") {
 			continue

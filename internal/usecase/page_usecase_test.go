@@ -16,34 +16,34 @@ func TestSaveAndViewPage(t *testing.T) {
 
 	slug, err := svc.SavePage(ctx, domain.DefaultBranch, "/guides/intro/", "# Привет\n\nТекст страницы")
 	if err != nil {
-		t.Fatalf("save: %v", err)
+		t.Fatalf("сохранение: %v", err)
 	}
 	if slug != "guides/intro" {
-		t.Fatalf("slug = %q", slug)
+		t.Fatalf("адрес = %q", slug)
 	}
 	if content.messages[0] != "создание: main/guides/intro" {
-		t.Fatalf("message = %q", content.messages[0])
+		t.Fatalf("сообщение = %q", content.messages[0])
 	}
 
 	view, err := svc.ViewPage(ctx, domain.DefaultBranch, "guides/intro")
 	if err != nil {
-		t.Fatalf("view: %v", err)
+		t.Fatalf("просмотр: %v", err)
 	}
 	if view.Missing || view.Title != "intro" || !strings.Contains(view.Markdown, "Текст страницы") {
-		t.Fatalf("view = %+v", view)
+		t.Fatalf("вид = %+v", view)
 	}
 	if view.Description != "Текст страницы" {
-		t.Fatalf("description = %q", view.Description)
+		t.Fatalf("описание = %q", view.Description)
 	}
 	if len(view.Revisions) != 1 || view.Revisions[0].Author != "система" {
-		t.Fatalf("revisions = %+v", view.Revisions)
+		t.Fatalf("правки = %+v", view.Revisions)
 	}
 
 	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "guides/intro", "# Ещё"); err != nil {
-		t.Fatalf("second save: %v", err)
+		t.Fatalf("второе сохранение: %v", err)
 	}
 	if content.messages[1] != "правка: main/guides/intro" {
-		t.Fatalf("message = %q", content.messages[1])
+		t.Fatalf("сообщение = %q", content.messages[1])
 	}
 }
 
@@ -65,17 +65,17 @@ func TestBranchesIsolatePages(t *testing.T) {
 
 	public, err := svc.ViewPage(ctx, "docs", "home")
 	if err != nil || public.Markdown != "публично" || !public.Public {
-		t.Fatalf("public = %+v, err = %v", public, err)
+		t.Fatalf("публичные = %+v, ошибка = %v", public, err)
 	}
 
 	main, err := svc.ListPages(ctx, domain.DefaultBranch)
 	if err != nil || len(main) != 1 || main[0].Slug != "home" {
-		t.Fatalf("main = %+v, err = %v", main, err)
+		t.Fatalf("основная = %+v, ошибка = %v", main, err)
 	}
 
 	visible, err := svc.VisibleBranches(ctx, false)
 	if err != nil || len(visible) != 1 || visible[0].Name != "docs" {
-		t.Fatalf("visible = %+v, err = %v", visible, err)
+		t.Fatalf("видимые = %+v, ошибка = %v", visible, err)
 	}
 
 	entries, err := svc.Sitemap(ctx)
@@ -84,19 +84,19 @@ func TestBranchesIsolatePages(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if entry.Path == "/home" {
-			t.Fatalf("private page in sitemap: %+v", entries)
+			t.Fatalf("приватная страница в карте сайта: %+v", entries)
 		}
 	}
 
 	if len(entries) != 3 || entries[0].Path != "/" || entries[2].Path != "/b/docs/home" {
-		t.Fatalf("sitemap = %+v", entries)
+		t.Fatalf("карта сайта = %+v", entries)
 	}
 }
 
 func TestDeleteDefaultBranch(t *testing.T) {
 	svc, _, _, _ := newWiki(t)
 	if err := svc.DeleteBranch(context.Background(), domain.DefaultBranch); !errors.Is(err, domain.ErrDefaultBranch) {
-		t.Fatalf("err = %v", err)
+		t.Fatalf("ошибка = %v", err)
 	}
 }
 
@@ -116,11 +116,11 @@ func TestDeleteBranchRemovesPages(t *testing.T) {
 	}
 
 	if _, err := svc.OpenBranch(ctx, "docs"); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("err = %v", err)
+		t.Fatalf("ошибка = %v", err)
 	}
 
 	if len(pages.pages) != 0 || len(content.files) != 0 || len(branches.items) != 1 {
-		t.Fatalf("pages %d files %d branches %d", len(pages.pages), len(content.files), len(branches.items))
+		t.Fatalf("страниц %d файлов %d веток %d", len(pages.pages), len(content.files), len(branches.items))
 	}
 }
 
@@ -129,14 +129,14 @@ func TestViewMissingAndInvalidSlug(t *testing.T) {
 
 	view, err := svc.ViewPage(context.Background(), domain.DefaultBranch, "нет-такой")
 	if err != nil {
-		t.Fatalf("view: %v", err)
+		t.Fatalf("просмотр: %v", err)
 	}
 	if !view.Missing || view.Slug != "нет-такой" {
-		t.Fatalf("view = %+v", view)
+		t.Fatalf("вид = %+v", view)
 	}
 
 	if _, err := svc.ViewPage(context.Background(), domain.DefaultBranch, "../secret"); !errors.Is(err, domain.ErrInvalidSlug) {
-		t.Fatalf("err = %v", err)
+		t.Fatalf("ошибка = %v", err)
 	}
 }
 
@@ -146,16 +146,16 @@ func TestEditForm(t *testing.T) {
 
 	form, err := svc.EditForm(ctx, domain.DefaultBranch, "")
 	if err != nil || !form.IsNew || form.Slug != "" || form.Branch != domain.DefaultBranch {
-		t.Fatalf("new form = %+v, err = %v", form, err)
+		t.Fatalf("новая форма = %+v, ошибка = %v", form, err)
 	}
 
 	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "home", "текст"); err != nil {
-		t.Fatalf("save: %v", err)
+		t.Fatalf("сохранение: %v", err)
 	}
 
 	form, err = svc.EditForm(ctx, domain.DefaultBranch, "home")
 	if err != nil || form.IsNew || form.Content != "текст" {
-		t.Fatalf("edit form = %+v, err = %v", form, err)
+		t.Fatalf("форма правки = %+v, ошибка = %v", form, err)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestSaveRejectsEmptySlug(t *testing.T) {
 	svc, _, _, _ := newWiki(t)
 	_, err := svc.SavePage(context.Background(), domain.DefaultBranch, "///", "x")
 	if !errors.Is(err, domain.ErrInvalidSlug) {
-		t.Fatalf("err = %v", err)
+		t.Fatalf("ошибка = %v", err)
 	}
 }
 

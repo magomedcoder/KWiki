@@ -20,7 +20,7 @@ func TestValidatePassword(t *testing.T) {
 	}
 	for _, password := range weak {
 		if err := ValidatePassword("admin@example.com", password); err != ErrWeakPassword {
-			t.Fatalf("%q err %v", password, err)
+			t.Fatalf("%q ошибка %v", password, err)
 		}
 	}
 }

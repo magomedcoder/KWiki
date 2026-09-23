@@ -42,16 +42,16 @@ func TestBranchFilesAndRelocate(t *testing.T) {
 
 	files, err := store.ListMarkdown(ctx, "main")
 	if err != nil || len(files) != 1 || files[0].Path != "guides/intro.md" {
-		t.Fatalf("files = %+v, err = %v", files, err)
+		t.Fatalf("файлы = %+v, ошибка = %v", files, err)
 	}
 
 	data, err := store.Read(ctx, "main", "guides/intro.md")
 	if err != nil || string(data) != "# Привет\n" {
-		t.Fatalf("data = %q, err = %v", data, err)
+		t.Fatalf("данные = %q, ошибка = %v", data, err)
 	}
 
 	if _, err := os.Stat(loose); !os.IsNotExist(err) {
-		t.Fatalf("loose file still present: %v", err)
+		t.Fatalf("свободный файл всё ещё на месте: %v", err)
 	}
 
 	if err := store.Write(ctx, "docs", "a.md", []byte("doc"), "создание: docs/a"); err != nil {
@@ -60,12 +60,12 @@ func TestBranchFilesAndRelocate(t *testing.T) {
 
 	docs, err := store.ListMarkdown(ctx, "docs")
 	if err != nil || len(docs) != 1 || docs[0].Path != "a.md" {
-		t.Fatalf("docs = %+v, err = %v", docs, err)
+		t.Fatalf("документы = %+v, ошибка = %v", docs, err)
 	}
 
 	mainFiles, err := store.ListMarkdown(ctx, "main")
 	if err != nil || len(mainFiles) != 1 {
-		t.Fatalf("main = %+v, err = %v", mainFiles, err)
+		t.Fatalf("основная = %+v, ошибка = %v", mainFiles, err)
 	}
 
 	if err := store.RemoveBranch(ctx, "docs"); err != nil {
@@ -74,11 +74,11 @@ func TestBranchFilesAndRelocate(t *testing.T) {
 
 	docs, err = store.ListMarkdown(ctx, "docs")
 	if err != nil || len(docs) != 0 {
-		t.Fatalf("docs after delete = %+v, err = %v", docs, err)
+		t.Fatalf("документы после удаления = %+v, ошибка = %v", docs, err)
 	}
 
 	mainFiles, err = store.ListMarkdown(ctx, "main")
 	if err != nil || len(mainFiles) != 1 {
-		t.Fatalf("main after delete = %+v, err = %v", mainFiles, err)
+		t.Fatalf("основная после удаления = %+v, ошибка = %v", mainFiles, err)
 	}
 }

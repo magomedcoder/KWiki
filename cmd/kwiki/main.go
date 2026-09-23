@@ -80,7 +80,7 @@ func main() {
 	handler.Register(mux)
 
 	if !*secure {
-		log.Printf("куки сессии без постоянного Secure: для HTTPS укажите -secure")
+		log.Printf("куки сессии без постоянной защиты: для защищённого соединения укажите -secure")
 	}
 	log.Printf("KWiki запущен на %s (каталог %s)", *addr, paths.Root)
 	log.Fatal(http.ListenAndServe(*addr, handler.Protect(mux)))

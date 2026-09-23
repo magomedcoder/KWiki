@@ -59,6 +59,8 @@ type View interface {
 
 	Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor)
 
+	Preview(w http.ResponseWriter, content string)
+
 	Login(w http.ResponseWriter, page usecase.LoginPage)
 
 	Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor)
@@ -92,11 +94,14 @@ func New(wiki Wiki, auth Auth, view View, secure bool, home string) *Handler {
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/login", h.login)
+	mux.HandleFunc("/favicon.ico", h.favicon)
 	mux.HandleFunc("/robots.txt", h.robots)
 	mux.HandleFunc("/sitemap.xml", h.sitemap)
 	mux.Handle("/users", h.requireAuth(http.HandlerFunc(h.users)))
 	mux.Handle("/branches", h.requireAuth(http.HandlerFunc(h.branches)))
 	mux.Handle("/logout", h.requireAuth(http.HandlerFunc(h.logout)))
+	mux.Handle("/edit/preview", h.requireAuth(http.HandlerFunc(h.previewEdit)))
+	mux.HandleFunc("/static/", h.staticFile)
 	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
 	mux.Handle("/", h.optionalAuth(http.HandlerFunc(h.wikiPage)))
 }
@@ -240,6 +245,35 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 func (h *Handler) denyPrivate(w http.ResponseWriter, r *http.Request) {
 	markIndexable(w, false)
 	http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
+}
+
+func (h *Handler) previewEdit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	h.view.Preview(w, r.FormValue("content"))
+}
+
+func (h *Handler) staticFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name, ok := map[string]string{
+		"/static/main.css": "resources/static/main.css",
+		"/static/main.js":  "resources/static/main.js",
+	}[r.URL.Path]
+	if !ok {
+		markIndexable(w, false)
+		http.Error(w, "страница не найдена", http.StatusNotFound)
+		return
+	}
+
+	http.ServeFile(w, r, name)
 }
 
 func (h *Handler) edit(w http.ResponseWriter, r *http.Request) {

@@ -16,7 +16,7 @@ func TestLoginSuccessAndClientBinding(t *testing.T) {
 
 	saved, ok := users.byEmail["admin@example.com"]
 	if !ok || saved.FirstName != "Иван" || saved.LastName != "Иванов" || !saved.Admin {
-		t.Fatalf("saved user %+v", saved)
+		t.Fatalf("сохранённый пользователь %+v", saved)
 	}
 
 	challenge, err := auth.BeginLogin(ctx, "", "browser")
@@ -30,20 +30,51 @@ func TestLoginSuccessAndClientBinding(t *testing.T) {
 	}
 
 	if issued.Token == challenge.Token || issued.Token == "" {
-		t.Fatalf("session was not rotated: %+v", issued)
+		t.Fatalf("сессия не сменилась: %+v", issued)
 	}
 
 	if _, err := sessions.Find(ctx, hashToken(challenge.Token)); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("challenge still present: %v", err)
+		t.Fatalf("проверочная сессия ещё есть: %v", err)
 	}
 
 	actor, err := auth.Resume(ctx, issued.Token, "browser")
 	if err != nil || actor.Email != "admin@example.com" || actor.CSRF != issued.CSRF {
-		t.Fatalf("actor %+v err %v", actor, err)
+		t.Fatalf("участник %+v ошибка %v", actor, err)
 	}
 
 	if _, err := auth.Resume(ctx, issued.Token, "other"); !errors.Is(err, domain.ErrUnauthenticated) {
-		t.Fatalf("other client err %v", err)
+		t.Fatalf("другой клиент, ошибка %v", err)
+	}
+}
+
+func TestBeginLoginReusesOpenChallenge(t *testing.T) {
+	ctx := context.Background()
+	auth, _, sessions := newTestAuth()
+	first, err := auth.BeginLogin(ctx, "", "browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := auth.BeginLogin(ctx, first.Token, "browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if second.Token != first.Token || second.CSRF != first.CSRF {
+		t.Fatalf("проверочная сессия сменилась: %+v затем %+v", first, second)
+	}
+
+	if len(sessions.items) != 1 {
+		t.Fatalf("сессий %d", len(sessions.items))
+	}
+
+	other, err := auth.BeginLogin(ctx, first.Token, "other-browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if other.Token == first.Token || other.CSRF == first.CSRF {
+		t.Fatalf("чужой клиент повторил проверочную сессию: %+v", other)
 	}
 }
 
@@ -56,7 +87,7 @@ func TestLoginRejectsBadCSRF(t *testing.T) {
 
 	_, err = auth.Login(context.Background(), challenge.Token, "wrong", "admin@example.com", "S3cure-Wiki-Pass", "127.0.0.1", "browser")
 	if !errors.Is(err, domain.ErrCSRF) {
-		t.Fatalf("err %v", err)
+		t.Fatalf("ошибка %v", err)
 	}
 }
 
@@ -67,7 +98,7 @@ func TestLoginHidesUnknownUser(t *testing.T) {
 	unknown := loginOnce(t, auth, "missing@example.com", "S3cure-Wiki-Pass")
 	wrong := loginOnce(t, auth, "admin@example.com", "Wrong-Password-1")
 	if !errors.Is(unknown, domain.ErrInvalidCredentials) || !errors.Is(wrong, domain.ErrInvalidCredentials) {
-		t.Fatalf("unknown %v wrong %v", unknown, wrong)
+		t.Fatalf("неизвестный %v неверный %v", unknown, wrong)
 	}
 }
 
@@ -83,17 +114,17 @@ func TestLoginLockout(t *testing.T) {
 	}
 
 	if !errors.Is(last, domain.ErrTooManyAttempts) {
-		t.Fatalf("last err %v", last)
+		t.Fatalf("последняя ошибка %v", last)
 	}
 
 	if err := loginOnce(t, auth, "admin@example.com", "S3cure-Wiki-Pass"); !errors.Is(err, domain.ErrTooManyAttempts) {
-		t.Fatalf("locked login err %v", err)
+		t.Fatalf("вход при ограничении, ошибка %v", err)
 	}
 
 	now = now.Add(lockDuration + time.Second)
 	issued := mustLogin(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
 	if issued.Token == "" {
-		t.Fatal("empty token after lock")
+		t.Fatal("пустой ключ после ограничения")
 	}
 }
 
@@ -108,11 +139,11 @@ func TestChangePasswordRevokesSession(t *testing.T) {
 	}
 
 	if _, err := auth.Resume(ctx, issued.Token, "browser"); !errors.Is(err, domain.ErrUnauthenticated) {
-		t.Fatalf("old session err %v", err)
+		t.Fatalf("старая сессия, ошибка %v", err)
 	}
 
 	if err := loginOnce(t, auth, "admin@example.com", "S3cure-Wiki-Pass"); !errors.Is(err, domain.ErrInvalidCredentials) {
-		t.Fatalf("old password err %v", err)
+		t.Fatalf("старый пароль, ошибка %v", err)
 	}
 }
 
@@ -129,7 +160,7 @@ func TestBlockAndDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if users.byEmail["petr@example.com"].Admin {
-		t.Fatal("second user became admin")
+		t.Fatal("второй пользователь стал администратором")
 	}
 
 	issued := mustLogin(t, auth, "petr@example.com", "S3cure-Wiki-Pass")
@@ -139,19 +170,19 @@ func TestBlockAndDeleteUser(t *testing.T) {
 	}
 
 	if _, err := auth.Resume(ctx, issued.Token, "browser"); !errors.Is(err, domain.ErrUnauthenticated) {
-		t.Fatalf("blocked session err %v", err)
+		t.Fatalf("сессия заблокированного, ошибка %v", err)
 	}
 
 	if err := loginOnce(t, auth, "petr@example.com", "S3cure-Wiki-Pass"); !errors.Is(err, domain.ErrBlocked) {
-		t.Fatalf("blocked login err %v", err)
+		t.Fatalf("вход заблокированного, ошибка %v", err)
 	}
 
 	if err := auth.SetBlocked(ctx, admin.ID, "admin@example.com", true); !errors.Is(err, domain.ErrSelfAction) {
-		t.Fatalf("self block err %v", err)
+		t.Fatalf("блокировка себя, ошибка %v", err)
 	}
 
 	if err := auth.SetBlocked(ctx, "", "admin@example.com", true); !errors.Is(err, domain.ErrLastAdmin) {
-		t.Fatalf("block last admin err %v", err)
+		t.Fatalf("блокировка последнего администратора, ошибка %v", err)
 	}
 
 	if err := auth.SetBlocked(ctx, "", "petr@example.com", false); err != nil {
@@ -163,15 +194,15 @@ func TestBlockAndDeleteUser(t *testing.T) {
 	}
 
 	if _, err := users.FindByEmail(ctx, "petr@example.com"); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("deleted user err %v", err)
+		t.Fatalf("удалённый пользователь, ошибка %v", err)
 	}
 
 	if err := auth.DeleteUser(ctx, "", "admin@example.com"); !errors.Is(err, domain.ErrLastAdmin) {
-		t.Fatalf("delete last admin err %v", err)
+		t.Fatalf("удаление последнего администратора, ошибка %v", err)
 	}
 
 	if len(sessions.items) != 0 {
-		t.Fatalf("sessions left: %d", len(sessions.items))
+		t.Fatalf("осталось сессий: %d", len(sessions.items))
 	}
 }
 

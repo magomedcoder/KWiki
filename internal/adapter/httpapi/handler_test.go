@@ -34,15 +34,15 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/guides/intro", nil))
 	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "/login?next=") {
-		t.Fatalf("status %d location %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatalf("код %d адрес %q", rec.Code, rec.Header().Get("Location"))
 	}
 
 	if rec.Header().Get("X-Frame-Options") != "DENY" {
-		t.Fatalf("frame header %q", rec.Header().Get("X-Frame-Options"))
+		t.Fatalf("заголовок кадра %q", rec.Header().Get("X-Frame-Options"))
 	}
 
 	if rec.Header().Get("Strict-Transport-Security") == "" {
-		t.Fatal("missing HSTS")
+		t.Fatal("нет строгого заголовка транспорта")
 	}
 
 	rec = httptest.NewRecorder()
@@ -51,16 +51,16 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 	defer res.Body.Close()
 	cookies := res.Cookies()
 	if len(cookies) != 1 {
-		t.Fatalf("cookies %d", len(cookies))
+		t.Fatalf("куки %d", len(cookies))
 	}
 
 	c := cookies[0]
 	if c.Name != "__Host-kwiki_session" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode {
-		t.Fatalf("cookie %+v", c)
+		t.Fatalf("кука %+v", c)
 	}
 
 	if !strings.Contains(view.login.CSRF, "csrf-token") {
-		t.Fatalf("login page %+v", view.login)
+		t.Fatalf("страница входа %+v", view.login)
 	}
 
 	body := "email=admin@example.com&password=secret&csrf=csrf-token&next=https://evil.example"
@@ -70,7 +70,7 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 	rec = httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
-		t.Fatalf("login status %d location %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatalf("вход, код %d адрес %q", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
@@ -90,21 +90,21 @@ func TestEditRequiresCSRF(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status %d", rec.Code)
+		t.Fatalf("код %d", rec.Code)
 	}
 
 	if wiki.saved {
-		t.Fatal("page was saved without csrf")
+		t.Fatal("страница сохранилась без проверочного ключа")
 	}
 }
 
 func TestSafeNext(t *testing.T) {
 	if got := safeNext("/guides/intro"); got != "/guides/intro" {
-		t.Fatalf("got %q", got)
+		t.Fatalf("получено %q", got)
 	}
 	for _, raw := range []string{"https://evil.example", "//evil.example", "/\\evil", "", "/a\nb"} {
 		if got := safeNext(raw); got != "/" {
-			t.Fatalf("%q -> %q", raw, got)
+			t.Fatalf("из %q в %q", raw, got)
 		}
 	}
 }
@@ -216,9 +216,10 @@ func (s *stubAuth) SetBlocked(context.Context, string, string, bool) error {
 }
 
 type stubView struct {
-	login usecase.LoginPage
-	index usecase.IndexView
-	page  usecase.PageScreen
+	login     usecase.LoginPage
+	index     usecase.IndexView
+	page      usecase.PageScreen
+	previewed string
 }
 
 func (s *stubView) Index(_ http.ResponseWriter, view usecase.IndexView, _ usecase.Actor) {
@@ -231,12 +232,56 @@ func (s *stubView) Page(_ http.ResponseWriter, view usecase.PageScreen, _ usecas
 
 func (stubView) Edit(http.ResponseWriter, usecase.EditForm, []domain.Branch, usecase.Actor) {}
 
+func (s *stubView) Preview(w http.ResponseWriter, content string) {
+	s.previewed = content
+	_, _ = w.Write([]byte(content))
+}
+
 func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor) {}
 
 func (stubView) Branches(http.ResponseWriter, usecase.BranchesPage, usecase.Actor) {}
 
 func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
 	s.login = page
+}
+
+func TestEditPreviewRequiresCSRF(t *testing.T) {
+	view := &stubView{}
+	auth := &stubAuth{actor: usecase.Actor{Email: "admin@example.com", CSRF: "session-csrf"}}
+	h := New(&stubWiki{}, auth, view, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+	srv := h.Protect(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/edit/preview", strings.NewReader("content=%23+Hi"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "kwiki_session", Value: "session-token"})
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || view.previewed != "" {
+		t.Fatalf("код %d просмотр %q", rec.Code, view.previewed)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/edit/preview", strings.NewReader("csrf=session-csrf&content=%23+Hi"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "kwiki_session", Value: "session-token"})
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || view.previewed != "# Hi" {
+		t.Fatalf("код %d просмотр %q", rec.Code, view.previewed)
+	}
+}
+
+func TestFaviconDoesNotOpenLogin(t *testing.T) {
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/favicon.ico", nil))
+	if rec.Code != http.StatusNotFound || strings.Contains(rec.Header().Get("Location"), "/login") {
+		t.Fatalf("код %d адрес %q", rec.Code, rec.Header().Get("Location"))
+	}
 }
 
 func TestPublicBranchIsIndexed(t *testing.T) {
@@ -250,15 +295,15 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d", rec.Code)
+		t.Fatalf("код %d", rec.Code)
 	}
 
 	if !strings.Contains(rec.Header().Get("X-Robots-Tag"), "index") {
-		t.Fatalf("robots %q", rec.Header().Get("X-Robots-Tag"))
+		t.Fatalf("роботы %q", rec.Header().Get("X-Robots-Tag"))
 	}
 
 	if !view.page.Indexable || view.page.Canonical != "https://wiki.example/b/docs/intro" {
-		t.Fatalf("page %+v", view.page)
+		t.Fatalf("страница %+v", view.page)
 	}
 
 	rec = httptest.NewRecorder()
@@ -266,7 +311,7 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !view.index.Catalog || !view.index.Indexable {
-		t.Fatalf("catalog status %d view %+v", rec.Code, view.index)
+		t.Fatalf("каталог, код %d вид %+v", rec.Code, view.index)
 	}
 
 	rec = httptest.NewRecorder()
@@ -274,11 +319,11 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "https://wiki.example/b/docs/intro") {
-		t.Fatalf("sitemap %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("карта сайта %d %s", rec.Code, rec.Body.String())
 	}
 
 	if strings.Contains(rec.Body.String(), "/b/secret") {
-		t.Fatal("private branch listed")
+		t.Fatal("в списке есть приватная ветка")
 	}
 
 	rec = httptest.NewRecorder()
@@ -287,13 +332,13 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	h.Protect(mux).ServeHTTP(rec, req)
 	body := rec.Body.String()
 	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") {
-		t.Fatalf("robots.txt %s", body)
+		t.Fatalf("файл роботов %s", body)
 	}
 
 	rec = httptest.NewRecorder()
 	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/main/intro", nil))
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/intro" {
-		t.Fatalf("redirect %d %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatalf("перенаправление %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
@@ -308,13 +353,13 @@ func TestBranchRootShowsHomeFile(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !view.page.Home || view.page.Slug != "README" || view.page.Canonical != "https://wiki.example/b/docs" {
-		t.Fatalf("status %d page %+v", rec.Code, view.page)
+		t.Fatalf("код %d страница %+v", rec.Code, view.page)
 	}
 
 	rec = httptest.NewRecorder()
 	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/docs/README", nil))
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/b/docs" {
-		t.Fatalf("redirect %d %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatalf("перенаправление %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
@@ -328,6 +373,6 @@ func TestFoldHome(t *testing.T) {
 		{Path: "/b/docs/guide"},
 	}, "README")
 	if len(got) != 3 || got[0].Path != "/" || !got[0].Updated.Equal(updated) || got[1].Path != "/b/docs" || got[2].Path != "/b/docs/guide" {
-		t.Fatalf("sitemap %+v", got)
+		t.Fatalf("карта сайта %+v", got)
 	}
 }

@@ -21,8 +21,8 @@ func splitWikiPath(path string) (branch, slug string, ok bool) {
 		return "", "", false
 	}
 
-	if strings.HasPrefix(path, "/b/") {
-		rest := strings.Trim(strings.TrimPrefix(path, "/b/"), "/")
+	if after, ok0 := strings.CutPrefix(path, "/b/"); ok0 {
+		rest := strings.Trim(after, "/")
 		if rest == "" {
 			return "", "", false
 		}
@@ -170,10 +170,10 @@ func homeRoot(path, home string) (string, bool) {
 }
 
 func markdownTitle(text string) string {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		if after, ok := strings.CutPrefix(line, "# "); ok {
+			return strings.TrimSpace(after)
 		}
 	}
 

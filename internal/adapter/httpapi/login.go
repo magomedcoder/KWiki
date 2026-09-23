@@ -9,6 +9,11 @@ import (
 	"github.com/magomedcoder/kwiki/internal/usecase"
 )
 
+func (h *Handler) favicon(w http.ResponseWriter, r *http.Request) {
+	markIndexable(w, false)
+	http.Error(w, "страница не найдена", http.StatusNotFound)
+}
+
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	switch r.Method {
@@ -70,7 +75,9 @@ func (h *Handler) renderLoginError(w http.ResponseWriter, r *http.Request, reaso
 		http.Error(w, "ошибка входа", status)
 		return
 	}
-	log.Printf("неудачный вход с %s", clientIP(r))
+	if !errors.Is(reason, domain.ErrCSRF) {
+		log.Printf("неудачный вход с %s", clientIP(r))
+	}
 
 	issued, err := h.auth.BeginLogin(r.Context(), "", clientHint(r))
 	if err != nil {

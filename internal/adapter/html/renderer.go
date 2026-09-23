@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/magomedcoder/kwiki/internal/adapter/markdown"
@@ -63,6 +64,8 @@ type editData struct {
 	Content  string
 	IsNew    bool
 	Branches []domain.Branch
+	Preview  template.HTML
+	Cancel   string
 }
 
 type loginData struct {
@@ -178,6 +181,10 @@ func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches [
 	frame := actorShell(title, actor)
 	frame.Home = domain.PagePath(form.Branch, "")
 	frame.NewHref = domain.EditPath(form.Branch, "")
+	cancel := domain.PagePath(form.Branch, "")
+	if form.Slug != "" {
+		cancel = domain.PagePath(form.Branch, form.Slug)
+	}
 	exec(w, r.edit, editData{
 		shell:    frame,
 		Branch:   form.Branch,
@@ -185,7 +192,21 @@ func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches [
 		Content:  form.Content,
 		IsNew:    form.IsNew,
 		Branches: branches,
+		Preview:  previewHTML(form.Content),
+		Cancel:   cancel,
 	})
+}
+
+func (r *Renderer) Preview(w http.ResponseWriter, content string) {
+	_, _ = w.Write([]byte(previewHTML(content)))
+}
+
+func previewHTML(content string) template.HTML {
+	if strings.TrimSpace(content) == "" {
+		return `<p class="preview-empty">Начните писать, и здесь появится страница.</p>`
+	}
+
+	return template.HTML(markdown.HTML([]byte(content)))
 }
 
 func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor) {
@@ -210,7 +231,7 @@ func (r *Renderer) Branches(w http.ResponseWriter, page usecase.BranchesPage, ac
 
 func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
 	exec(w, r.login, loginData{
-		shell: shell{Title: "Вход", CSRF: page.CSRF, Home: "/"},
+		Title: "Вход", CSRF: page.CSRF, Home: "/",
 		Error: page.Error,
 		Next:  page.Next,
 		Value: page.Email,

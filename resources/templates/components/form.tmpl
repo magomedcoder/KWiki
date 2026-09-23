@@ -27,13 +27,13 @@
 
 {{define "check"}}
 <label class="my-3.5 flex flex-row items-center gap-2 text-base text-wiki-ink">
-    <input class="size-4" type="checkbox" name="{{.Name}}" value="{{.Value}}">
+    <input class="size-4" type="checkbox" name="{{.Name}}" value="{{.Value}}"{{if .Checked}} checked{{end}}>
     {{.Label}}
 </label>
 {{end}}
 
 {{define "button"}}
-<button class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 py-1.5 text-sm text-wiki-ink hover:border-wiki-muted hover:bg-white data-active:border-wiki-muted data-active:bg-white data-active:font-semibold" type="{{.Type}}"{{if .Name}} name="{{.Name}}"{{end}}{{if .Value}} value="{{.Value}}"{{end}}{{if .Before}} data-before="{{.Before}}"{{end}}{{if .After}} data-after="{{.After}}"{{end}}{{if .Placeholder}} data-placeholder="{{.Placeholder}}"{{end}}{{if .Mode}} data-mode="{{.Mode}}"{{end}}{{if .Active}} data-active{{end}}>{{.Label}}</button>
+<button class="wiki-btn" type="{{.Type}}"{{if .Name}} name="{{.Name}}"{{end}}{{if .Value}} value="{{.Value}}"{{end}}{{if .Before}} data-before="{{.Before}}"{{end}}{{if .After}} data-after="{{.After}}"{{end}}{{if .Placeholder}} data-placeholder="{{.Placeholder}}"{{end}}{{if .Mode}} data-mode="{{.Mode}}"{{end}}{{if .Media}} data-media-open="{{.Media}}"{{end}}{{if .Active}} data-active{{end}}>{{.Label}}</button>
 {{end}}
 
 {{define "text-link"}}

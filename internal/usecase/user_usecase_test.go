@@ -147,6 +147,87 @@ func TestChangePasswordRevokesSession(t *testing.T) {
 	}
 }
 
+func TestUpdateUserAndOwnPassword(t *testing.T) {
+	ctx := context.Background()
+	auth, users, _ := newTestAuth()
+	createUser(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
+	if err := auth.CreateUser(ctx, Account{
+		FirstName: "Пётр",
+		LastName:  "Петров",
+		Email:     "petr@example.com",
+		Password:  "S3cure-Wiki-Pass",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	admin := users.byEmail["admin@example.com"]
+	issued := mustLogin(t, auth, "petr@example.com", "S3cure-Wiki-Pass")
+	if err := auth.UpdateUser(ctx, admin.ID, "petr@example.com", Account{
+		FirstName: "Пётр",
+		LastName:  "Сидоров",
+		Email:     "sidor@example.com",
+		Admin:     true,
+		Password:  "N3w-Wiki-Password",
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := users.FindByEmail(ctx, "sidor@example.com")
+	if err != nil || saved.LastName != "Сидоров" || !saved.Admin || !saved.Blocked {
+		t.Fatalf("профиль %+v ошибка %v", saved, err)
+	}
+
+	if _, err := users.FindByEmail(ctx, "petr@example.com"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("старая почта, ошибка %v", err)
+	}
+
+	if _, err := auth.Resume(ctx, issued.Token, "browser"); !errors.Is(err, domain.ErrUnauthenticated) {
+		t.Fatalf("сессия после смены пароля, ошибка %v", err)
+	}
+
+	if err := auth.UpdateUser(ctx, admin.ID, "sidor@example.com", Account{
+		FirstName: "Пётр",
+		LastName:  "Сидоров",
+		Email:     "admin@example.com",
+	}, false); !errors.Is(err, domain.ErrEmailTaken) {
+		t.Fatalf("занятая почта, ошибка %v", err)
+	}
+
+	if err := auth.UpdateUser(ctx, admin.ID, "admin@example.com", Account{
+		FirstName: "Иван",
+		LastName:  "Иванов",
+		Email:     "admin@example.com",
+	}, false); !errors.Is(err, domain.ErrLastAdmin) {
+		t.Fatalf("снятие прав последнего администратора, ошибка %v", err)
+	}
+
+	if err := auth.UpdateUser(ctx, admin.ID, "admin@example.com", Account{
+		FirstName: "Иван",
+		LastName:  "Иванов",
+		Email:     "admin@example.com",
+		Admin:     true,
+	}, true); !errors.Is(err, domain.ErrSelfAction) {
+		t.Fatalf("блокировка себя, ошибка %v", err)
+	}
+
+	own := mustLogin(t, auth, "admin@example.com", "S3cure-Wiki-Pass")
+	if err := auth.ChangeOwnPassword(ctx, admin.ID, "wrong-password", "N3w-Wiki-Password"); !errors.Is(err, domain.ErrInvalidCredentials) {
+		t.Fatalf("чужой текущий пароль, ошибка %v", err)
+	}
+
+	if err := auth.ChangeOwnPassword(ctx, admin.ID, "S3cure-Wiki-Pass", "N3w-Wiki-Password"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := auth.Resume(ctx, own.Token, "browser"); !errors.Is(err, domain.ErrUnauthenticated) {
+		t.Fatalf("сессия после своего пароля, ошибка %v", err)
+	}
+
+	if err := loginOnce(t, auth, "admin@example.com", "N3w-Wiki-Password"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBlockAndDeleteUser(t *testing.T) {
 	ctx := context.Background()
 	auth, users, sessions := newTestAuth()
@@ -301,6 +382,23 @@ func (m *memUsers) FindByID(_ context.Context, id string) (domain.User, error) {
 	}
 
 	return user, nil
+}
+
+func (m *memUsers) UpdateProfile(_ context.Context, id, firstName, lastName, email string) error {
+	user, ok := m.byID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if other, exists := m.byEmail[email]; exists && other.ID != id {
+		return domain.ErrEmailTaken
+	}
+	delete(m.byEmail, user.Email)
+	user.FirstName = firstName
+	user.LastName = lastName
+	user.Email = email
+	m.byID[id] = user
+	m.byEmail[email] = user
+	return nil
 }
 
 func (m *memUsers) UpdatePasswordHash(_ context.Context, id, hash string) error {

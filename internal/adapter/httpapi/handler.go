@@ -25,7 +25,15 @@ type Wiki interface {
 
 	EditForm(ctx context.Context, branch, slug string) (usecase.EditForm, error)
 
-	SavePage(ctx context.Context, branch, slug, content string) (string, error)
+	SavePage(ctx context.Context, branch, slug, content, draft string) (string, error)
+
+	StageMedia(ctx context.Context, draft, branch, folder, name string, data []byte, overwrite bool) (usecase.MediaItem, error)
+
+	ListMedia(ctx context.Context, draft, branch string) ([]usecase.MediaItem, error)
+
+	DeleteMedia(ctx context.Context, draft, branch, path string) error
+
+	ReadMedia(ctx context.Context, draft, branch, path string) ([]byte, string, error)
 
 	CreateBranch(ctx context.Context, name string, public bool) (domain.Branch, error)
 
@@ -51,6 +59,10 @@ type Auth interface {
 
 	DeleteUser(ctx context.Context, actorID, email string) error
 
+	UpdateUser(ctx context.Context, actorID, currentEmail string, account usecase.Account, blocked bool) error
+
+	ChangeOwnPassword(ctx context.Context, userID, current, next string) error
+
 	SetBlocked(ctx context.Context, actorID, email string, blocked bool) error
 }
 
@@ -61,7 +73,7 @@ type View interface {
 
 	Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor)
 
-	Preview(w http.ResponseWriter, content string)
+	Preview(w http.ResponseWriter, content, branch string)
 
 	Login(w http.ResponseWriter, page usecase.LoginPage)
 
@@ -104,9 +116,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/robots.txt", h.robots)
 	mux.HandleFunc("/sitemap.xml", h.sitemap)
 	mux.Handle("/users", h.requireAuth(http.HandlerFunc(h.users)))
+	mux.Handle("/account/password", h.requireAuth(http.HandlerFunc(h.changePassword)))
 	mux.Handle("/branches", h.requireAuth(http.HandlerFunc(h.branches)))
 	mux.Handle("/logout", h.requireAuth(http.HandlerFunc(h.logout)))
 	mux.Handle("/edit/preview", h.requireAuth(http.HandlerFunc(h.previewEdit)))
+	mux.Handle("/media", h.requireAuth(http.HandlerFunc(h.mediaAPI)))
 	mux.HandleFunc("/css/", h.asset)
 	mux.HandleFunc("/js/", h.asset)
 	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
@@ -117,6 +131,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, _, ok := splitMediaPath(r.URL.Path); ok {
+		h.serveMedia(w, r)
 		return
 	}
 
@@ -347,7 +366,7 @@ func (h *Handler) previewEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	h.view.Preview(w, r.FormValue("content"))
+	h.view.Preview(w, r.FormValue("content"), requestedBranch(r))
 }
 
 func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
@@ -413,7 +432,7 @@ func (h *Handler) savePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	branch := requestedBranch(r)
-	slug, err := h.wiki.SavePage(r.Context(), branch, r.FormValue("slug"), r.FormValue("content"))
+	slug, err := h.wiki.SavePage(r.Context(), branch, r.FormValue("slug"), r.FormValue("content"), h.sessionToken(r))
 	if err != nil && !errors.Is(err, usecase.ErrIndexSync) {
 		if errors.Is(err, domain.ErrInvalidSlug) {
 			http.Error(w, "некорректный адрес страницы", http.StatusBadRequest)

@@ -173,9 +173,25 @@ func (stubWiki) EditForm(context.Context, string, string) (usecase.EditForm, err
 	return usecase.EditForm{}, nil
 }
 
-func (s *stubWiki) SavePage(context.Context, string, string, string) (string, error) {
+func (s *stubWiki) SavePage(context.Context, string, string, string, string) (string, error) {
 	s.saved = true
 	return "home", nil
+}
+
+func (s *stubWiki) StageMedia(context.Context, string, string, string, string, []byte, bool) (usecase.MediaItem, error) {
+	return usecase.MediaItem{}, nil
+}
+
+func (s *stubWiki) ListMedia(context.Context, string, string) ([]usecase.MediaItem, error) {
+	return nil, nil
+}
+
+func (s *stubWiki) DeleteMedia(context.Context, string, string, string) error {
+	return nil
+}
+
+func (s *stubWiki) ReadMedia(context.Context, string, string, string) ([]byte, string, error) {
+	return nil, "", domain.ErrNotFound
 }
 
 func (stubWiki) CreateBranch(context.Context, string, bool) (domain.Branch, error) {
@@ -231,6 +247,14 @@ func (s *stubAuth) DeleteUser(context.Context, string, string) error {
 	return nil
 }
 
+func (s *stubAuth) UpdateUser(context.Context, string, string, usecase.Account, bool) error {
+	return nil
+}
+
+func (s *stubAuth) ChangeOwnPassword(context.Context, string, string, string) error {
+	return nil
+}
+
 func (s *stubAuth) SetBlocked(context.Context, string, string, bool) error {
 	return nil
 }
@@ -252,7 +276,7 @@ func (s *stubView) Page(_ http.ResponseWriter, view usecase.PageScreen, _ usecas
 
 func (stubView) Edit(http.ResponseWriter, usecase.EditForm, []domain.Branch, usecase.Actor) {}
 
-func (s *stubView) Preview(w http.ResponseWriter, content string) {
+func (s *stubView) Preview(w http.ResponseWriter, content, _ string) {
 	s.previewed = content
 	_, _ = w.Write([]byte(content))
 }
@@ -411,7 +435,7 @@ func TestPublicBranchIsIndexed(t *testing.T) {
 	req.Host = "wiki.example"
 	h.Protect(mux).ServeHTTP(rec, req)
 	body := rec.Body.String()
-	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") || !strings.Contains(body, "Disallow: /history") {
+	if !strings.Contains(body, "Sitemap: https://wiki.example/sitemap.xml") || !strings.Contains(body, "Disallow: /edit") || !strings.Contains(body, "Disallow: /history") || !strings.Contains(body, "Disallow: /media") {
 		t.Fatalf("файл роботов %s", body)
 	}
 
@@ -456,6 +480,49 @@ func TestBranchRootShowsHomeFile(t *testing.T) {
 	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/b/docs/README", nil))
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/b/docs" {
 		t.Fatalf("перенаправление %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestChangePasswordClearsSession(t *testing.T) {
+	auth := &stubAuth{
+		actor: usecase.Actor{
+			ID:    "user-1",
+			Email: "admin@example.com",
+			CSRF:  "session-csrf",
+		},
+	}
+	h := New(&stubWiki{}, auth, &stubView{}, false, "README")
+	mux := http.NewServeMux()
+	h.Register(mux)
+	srv := h.Protect(mux)
+
+	mismatch := httptest.NewRequest(http.MethodPost, "/account/password", strings.NewReader("csrf=session-csrf&current_password=old&password=N3w-Wiki-Password&password_confirm=other"))
+	mismatch.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mismatch.AddCookie(&http.Cookie{
+		Name:  "kwiki_session",
+		Value: "session-token",
+	})
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, mismatch)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Пароли не совпадают") {
+		t.Fatalf("несовпадение %d %s", rec.Code, rec.Body.String())
+	}
+
+	ok := httptest.NewRequest(http.MethodPost, "/account/password", strings.NewReader("csrf=session-csrf&current_password=old&password=N3w-Wiki-Password&password_confirm=N3w-Wiki-Password"))
+	ok.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	ok.AddCookie(&http.Cookie{
+		Name:  "kwiki_session",
+		Value: "session-token",
+	})
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, ok)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("смена пароля %d %s", rec.Code, rec.Body.String())
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].MaxAge >= 0 {
+		t.Fatalf("кука %+v", cookies)
 	}
 }
 

@@ -13,6 +13,7 @@ var (
 	reBold     = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	reItalic   = regexp.MustCompile(`\*([^*]+)\*`)
 	reCode     = regexp.MustCompile("`([^`]+)`")
+	reImage    = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
 	reLink     = regexp.MustCompile(`\[([^\]]+)\]\(([^)\s]+)\)`)
 )
 
@@ -22,12 +23,12 @@ type Heading struct {
 	Text  string
 }
 
-func HTML(src []byte) string {
-	body, _ := Document(src)
+func HTML(src []byte, branch string) string {
+	body, _ := Document(src, branch)
 	return body
 }
 
-func Document(src []byte) (string, []Heading) {
+func Document(src []byte, branch string) (string, []Heading) {
 	lines := strings.Split(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n")
 
 	var out strings.Builder
@@ -79,7 +80,7 @@ func Document(src []byte) (string, []Heading) {
 			id := anchorID(text, used)
 			headings = append(headings, Heading{Level: level, ID: id, Text: text})
 			out.WriteString("<h" + strconv.Itoa(level) + ` id="` + html.EscapeString(id) + `">`)
-			out.WriteString(inline(m[2]))
+			out.WriteString(inline(m[2], branch))
 			out.WriteString("</h" + strconv.Itoa(level) + ">\n")
 			continue
 		}
@@ -91,7 +92,7 @@ func Document(src []byte) (string, []Heading) {
 				inList = true
 			}
 			out.WriteString("<li>")
-			out.WriteString(inline(m[1]))
+			out.WriteString(inline(m[1], branch))
 			out.WriteString("</li>\n")
 			continue
 		}
@@ -102,7 +103,7 @@ func Document(src []byte) (string, []Heading) {
 			continue
 		}
 
-		para = append(para, inline(strings.TrimSpace(line)))
+		para = append(para, inline(strings.TrimSpace(line), branch))
 	}
 
 	flushPara()
@@ -120,6 +121,7 @@ func plainText(s string) string {
 	s = reCode.ReplaceAllString(s, "$1")
 	s = reBold.ReplaceAllString(s, "$1")
 	s = reItalic.ReplaceAllString(s, "$1")
+	s = reImage.ReplaceAllString(s, "$1")
 	s = reLink.ReplaceAllString(s, "$1")
 
 	return strings.TrimSpace(s)
@@ -139,7 +141,7 @@ func anchorID(text string, used map[string]int) string {
 	return id + "-" + strconv.Itoa(used[id])
 }
 
-func inline(s string) string {
+func inline(s, branch string) string {
 	var codes []string
 	s = reCode.ReplaceAllStringFunc(s, func(m string) string {
 		codes = append(codes, m[1:len(m)-1])
@@ -149,6 +151,29 @@ func inline(s string) string {
 	s = html.EscapeString(s)
 	s = reBold.ReplaceAllString(s, "<strong>$1</strong>")
 	s = reItalic.ReplaceAllString(s, "<em>$1</em>")
+	s = reImage.ReplaceAllStringFunc(s, func(m string) string {
+		parts := reImage.FindStringSubmatch(m)
+		if len(parts) != 3 {
+			return m
+		}
+
+		alt, href := parts[1], resolveMediaHref(parts[2], branch)
+		lower := strings.ToLower(href)
+		switch {
+		case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"),
+			strings.HasSuffix(lower, ".png"), strings.HasSuffix(lower, ".gif"),
+			strings.HasSuffix(lower, ".webp"), strings.HasSuffix(lower, ".svg"),
+			strings.HasSuffix(lower, ".avif"), strings.HasSuffix(lower, ".bmp"),
+			strings.HasSuffix(lower, ".ico"):
+			return `<img src="` + href + `" alt="` + alt + `">`
+		default:
+			if alt == "" {
+				alt = href
+			}
+
+			return `<a href="` + href + `">` + alt + `</a>`
+		}
+	})
 	s = reLink.ReplaceAllString(s, `<a href="$2">$1</a>`)
 
 	for i, c := range codes {
@@ -156,4 +181,27 @@ func inline(s string) string {
 	}
 
 	return s
+}
+
+func resolveMediaHref(href, branch string) string {
+	if branch == "" || href == "" {
+		return href
+	}
+
+	lower := strings.ToLower(href)
+	if strings.HasPrefix(href, "/") || strings.HasPrefix(href, "#") || strings.Contains(href, "://") || strings.HasPrefix(lower, "mailto:") {
+		return href
+	}
+
+	if strings.Contains(href, "..") {
+		return href
+	}
+
+	rel := strings.Trim(href, "/")
+	rel = strings.TrimPrefix(rel, "media/")
+	if rel == "" {
+		return href
+	}
+
+	return "/b/" + branch + "/media/" + rel
 }

@@ -18,7 +18,7 @@ func (h *Handler) branches(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		h.renderBranches(w, r, "", branchNotice(r.URL.Query().Get("notice")), http.StatusOK)
+		h.renderBranches(w, r, "", branchNotice(r.URL.Query().Get("notice")), http.StatusOK, "", "", false)
 	case http.MethodPost:
 		h.submitBranch(w, r)
 	default:
@@ -27,11 +27,14 @@ func (h *Handler) branches(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) submitBranch(w http.ResponseWriter, r *http.Request) {
+	action := r.FormValue("action")
+	name := r.FormValue("name")
+	public := r.FormValue("public") == "1"
 	var err error
 	var notice string
-	switch r.FormValue("action") {
+	switch action {
 	case "create":
-		_, err = h.wiki.CreateBranch(r.Context(), r.FormValue("name"), r.FormValue("public") == "1")
+		_, err = h.wiki.CreateBranch(r.Context(), name, public)
 		notice = "created"
 	case "public":
 		err = h.wiki.SetBranchPublic(r.Context(), r.FormValue("name"), true)
@@ -54,14 +57,14 @@ func (h *Handler) submitBranch(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "ошибка веток", status)
 			return
 		}
-		h.renderBranches(w, r, message, "", status)
+		h.renderBranches(w, r, message, "", status, action, name, public)
 		return
 	}
 
 	http.Redirect(w, r, "/branches?notice="+notice, http.StatusSeeOther)
 }
 
-func (h *Handler) renderBranches(w http.ResponseWriter, r *http.Request, message, notice string, status int) {
+func (h *Handler) renderBranches(w http.ResponseWriter, r *http.Request, message, notice string, status int, action, name string, public bool) {
 	branches, err := h.wiki.ListBranches(r.Context())
 	if err != nil {
 		log.Printf("список веток: %v", err)
@@ -74,6 +77,11 @@ func (h *Handler) renderBranches(w http.ResponseWriter, r *http.Request, message
 		Branches: branches,
 		Error:    message,
 		Notice:   notice,
+		Form:     action,
+		Draft: usecase.BranchDraft{
+			Name:   name,
+			Public: public,
+		},
 	}, actorFrom(r))
 }
 

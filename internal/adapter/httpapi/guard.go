@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
@@ -42,7 +43,13 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if err := r.ParseForm(); err != nil {
+			ct := r.Header.Get("Content-Type")
+			if strings.HasPrefix(ct, "multipart/form-data") {
+				if err := r.ParseMultipartForm(mediaFormMemory); err != nil {
+					http.Error(w, "некорректный запрос", http.StatusBadRequest)
+					return
+				}
+			} else if err := r.ParseForm(); err != nil {
 				http.Error(w, "некорректный запрос", http.StatusBadRequest)
 				return
 			}

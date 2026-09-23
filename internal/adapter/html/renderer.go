@@ -211,7 +211,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 	var body template.HTML
 	var headings []markdown.Heading
 	if !view.Missing {
-		rendered, found := markdown.Document([]byte(view.Markdown))
+		rendered, found := markdown.Document([]byte(view.Markdown), view.Branch)
 		body = template.HTML(rendered)
 		headings = found
 		if !view.Home && strings.TrimSpace(view.Title) != "" {
@@ -293,21 +293,21 @@ func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches [
 		Content:  form.Content,
 		IsNew:    form.IsNew,
 		Branches: branches,
-		Preview:  previewHTML(form.Content),
+		Preview:  previewHTML(form.Content, form.Branch),
 		Cancel:   cancel,
 	})
 }
 
-func (r *Renderer) Preview(w http.ResponseWriter, content string) {
-	_, _ = w.Write([]byte(previewHTML(content)))
+func (r *Renderer) Preview(w http.ResponseWriter, content, branch string) {
+	_, _ = w.Write([]byte(previewHTML(content, branch)))
 }
 
-func previewHTML(content string) template.HTML {
+func previewHTML(content, branch string) template.HTML {
 	if strings.TrimSpace(content) == "" {
-		return `<p class="m-0 text-wiki-faint">Начните писать, и здесь появится страница.</p>`
+		return `<p class="m-0 text-wiki-faint">Просмотр</p>`
 	}
 
-	return template.HTML(markdown.HTML([]byte(content)))
+	return template.HTML(markdown.HTML([]byte(content), branch))
 }
 
 func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor) {

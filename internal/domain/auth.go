@@ -14,6 +14,8 @@ type UserRepository interface {
 
 	UpdatePasswordHash(ctx context.Context, id, hash string) error
 
+	UpdateProfile(ctx context.Context, id, firstName, lastName, email string) error
+
 	SetBlocked(ctx context.Context, id string, blocked bool) error
 
 	SetAdmin(ctx context.Context, id string, admin bool) error

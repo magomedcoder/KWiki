@@ -70,10 +70,17 @@ type PageScreen struct {
 	Pages       []PageLink
 }
 
+type BranchDraft struct {
+	Name   string
+	Public bool
+}
+
 type BranchesPage struct {
 	Branches []domain.Branch
 	Error    string
 	Notice   string
+	Form     string
+	Draft    BranchDraft
 }
 
 type SitemapEntry struct {
@@ -85,6 +92,7 @@ type PageUseCase struct {
 	pages    domain.PageRepository
 	branches domain.BranchRepository
 	content  domain.ContentRepository
+	staging  *mediaStaging
 }
 
 func New(pages domain.PageRepository, branches domain.BranchRepository, content domain.ContentRepository) *PageUseCase {
@@ -92,7 +100,12 @@ func New(pages domain.PageRepository, branches domain.BranchRepository, content 
 		pages:    pages,
 		branches: branches,
 		content:  content,
+		staging:  newMediaStaging(""),
 	}
+}
+
+func (p *PageUseCase) SetStagingRoot(root string) {
+	p.staging = newMediaStaging(root)
 }
 
 func (p *PageUseCase) EnsureDefault(ctx context.Context) error {
@@ -336,13 +349,18 @@ func (p *PageUseCase) EditForm(ctx context.Context, rawBranch, rawSlug string) (
 	}, nil
 }
 
-func (p *PageUseCase) SavePage(ctx context.Context, rawBranch, rawSlug, content string) (string, error) {
+func (p *PageUseCase) SavePage(ctx context.Context, rawBranch, rawSlug, content, draft string) (string, error) {
 	branch, err := p.OpenBranch(ctx, rawBranch)
 	if err != nil {
 		return "", err
 	}
 
 	slug, err := domain.NormalizeSlug(rawSlug)
+	if err != nil {
+		return "", err
+	}
+
+	content, copied, err := p.copyReferencedMedia(ctx, branch.Name, content)
 	if err != nil {
 		return "", err
 	}
@@ -355,9 +373,36 @@ func (p *PageUseCase) SavePage(ctx context.Context, rawBranch, rawSlug, content 
 		return "", err
 	}
 
+	changes := append([]domain.ContentChange(nil), copied...)
+	var stagedFiles []domain.ContentFile
+	if draft != "" {
+		stagedFiles, err = p.staging.list(draft, branch.Name)
+		if err != nil {
+			return "", err
+		}
+
+		for _, file := range stagedFiles {
+			data, ok, getErr := p.staging.get(draft, branch.Name, file.Path)
+			if getErr != nil {
+				return "", getErr
+			}
+
+			if ok {
+				changes = append(changes, domain.ContentChange{Path: file.Path, Data: data})
+			}
+		}
+	}
+	changes = append(changes, domain.ContentChange{Path: path, Data: []byte(content)})
+
 	message := action + ": " + branch.Name + "/" + slug
-	if err := p.content.Write(ctx, branch.Name, path, []byte(content), message); err != nil {
+	if err := p.content.WriteBatch(ctx, branch.Name, changes, message); err != nil {
 		return "", err
+	}
+
+	if draft != "" && len(stagedFiles) > 0 {
+		if _, err := p.staging.consume(draft, branch.Name); err != nil {
+			return slug, err
+		}
 	}
 
 	if err := p.syncBranch(ctx, branch.Name); err != nil {

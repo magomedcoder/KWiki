@@ -1,21 +1,23 @@
 {{define "content"}}
 {{template "tabs" (list (dict "Label" "Читать" "Href" .Cancel) (dict "Label" "Править" "Current" true))}}
 {{template "title" .Title}}
-<form method="POST" action="/edit" class="editor">
+<form method="POST" action="/edit" class="editor" data-branch="{{.Branch}}" data-max-media="2097152">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  {{if .IsNew}}
-  {{template "label-start" "Ветка"}}
-    <select class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3]" name="branch">
-      {{range .Branches}}
-      <option value="{{.Name}}" {{if eq .Name $.Branch}}selected{{end}}>{{.Name}}{{if not .Public}} (приватная){{end}}</option>
-      {{end}}
-    </select>
-  {{template "label-end"}}
-  {{else}}
-  <input type="hidden" name="branch" value="{{.Branch}}">
-  {{template "field" (dict "Label" "Ветка" "Type" "text" "Value" .Branch "Readonly" true)}}
-  {{end}}
-  {{template "field" (dict "Label" "Адрес" "Type" "text" "Name" "slug" "Value" .Slug "Required" true "Readonly" (not .IsNew))}}
+  <div class="grid items-start gap-x-6 md:grid-cols-[minmax(0,1fr)_12rem]">
+    {{template "field" (dict "Label" "Адрес" "Type" "text" "Name" "slug" "Value" .Slug "Required" true "Readonly" (not .IsNew) "Spellcheck" false)}}
+    {{if .IsNew}}
+    {{template "label-start" "Ветка"}}
+      <select class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3]" name="branch" id="editor-branch">
+        {{range .Branches}}
+        <option value="{{.Name}}" {{if eq .Name $.Branch}}selected{{end}}>{{.Name}}{{if not .Public}} (приватная){{end}}</option>
+        {{end}}
+      </select>
+    {{template "label-end"}}
+    {{else}}
+    <input type="hidden" name="branch" value="{{.Branch}}" id="editor-branch">
+    {{template "field" (dict "Label" "Ветка" "Type" "text" "Value" .Branch "Readonly" true)}}
+    {{end}}
+  </div>
 
   <div class="editor-split group mt-4" data-mode="edit">
     <div class="flex flex-wrap items-center justify-between gap-1.5">
@@ -26,6 +28,8 @@
         {{template "button" (dict "Type" "button" "Label" "Список" "Before" "- " "Placeholder" "пункт")}}
         {{template "button" (dict "Type" "button" "Label" "Код" "Before" "`" "After" "`" "Placeholder" "код")}}
         {{template "button" (dict "Type" "button" "Label" "Ссылка" "Before" "[" "After" "](адрес)" "Placeholder" "ссылка")}}
+        {{template "button" (dict "Type" "button" "Label" "Загрузить медиа" "Media" "upload")}}
+        {{template "button" (dict "Type" "button" "Label" "Из загруженных" "Media" "pick")}}
       </div>
       <div class="editor-modes ms-auto flex flex-wrap gap-1.5">
         {{template "button" (dict "Type" "button" "Label" "Правка" "Mode" "edit" "Active" true)}}
@@ -36,14 +40,14 @@
     <label class="editor-source my-3.5 flex flex-col gap-1.5 text-sm text-wiki-muted group-data-[mode=preview]:hidden">
       Текст
       <textarea
-        class="h-72 w-full resize-y rounded-sm border border-wiki-line bg-white px-2.5 py-2 font-mono text-sm leading-snug text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3] max-md:h-56"
+        class="h-[calc(100dvh-16rem)] min-h-[28rem] w-full resize-y rounded-sm border border-wiki-line bg-white px-2.5 py-2 font-mono text-sm leading-snug text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3] max-md:h-[calc(100dvh-20rem)] max-md:min-h-[22rem]"
         name="content"
         rows="24"
         spellcheck="false"
         required
       >{{.Content}}</textarea>
     </label>
-    <section class="preview mt-3 hidden min-h-64 flex-col rounded-sm border border-wiki-line-soft bg-wiki-well p-4 group-data-[mode=preview]:flex" aria-live="polite">
+    <section class="preview mt-3 hidden min-h-[28rem] flex-col rounded-sm border border-wiki-line-soft bg-wiki-well p-4 group-data-[mode=preview]:flex max-md:min-h-[22rem]" aria-live="polite">
       {{template "prose" (dict "Class" "preview-body flex-1" "Body" .Preview)}}
     </section>
   </div>
@@ -53,5 +57,49 @@
     {{template "text-link" (dict "Href" .Cancel "Label" "Отмена")}}
   {{template "actions-end"}}
 </form>
-<script src="/js/main.js"></script>
+
+<dialog class="m-auto w-[min(36rem,calc(100vw-2rem))] max-h-[min(40rem,calc(100vh-2rem))] overflow-auto rounded-sm border border-wiki-line bg-white p-4 text-wiki-ink shadow-lg backdrop:bg-black/30" id="media-upload-dialog">
+  <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
+    <h2 class="m-0 font-serif text-xl font-normal">Загрузить медиа</h2>
+    <button class="inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-2 py-1 text-sm" value="cancel" type="submit">Закрыть</button>
+  </form>
+  <p class="mt-0 mb-3 text-sm text-wiki-muted">До 2 МБ. Файл попадёт в Git при сохранении страницы.</p>
+  <div class="mb-3 flex flex-col gap-2">
+    <button class="wiki-btn wiki-btn-solid w-full" type="button" id="media-file-pick">Выбрать файл</button>
+    <p class="m-0 text-sm text-wiki-muted" id="media-file-name">Файл не выбран</p>
+    <input class="sr-only" type="file" id="media-file">
+  </div>
+  <label class="mb-2 flex flex-col gap-1 text-sm text-wiki-muted">Папка
+    <select class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" id="media-folder-pick">
+      <option value="">Корень</option>
+      <option value="__new__">Новая папка…</option>
+    </select>
+  </label>
+  <label class="mb-2 hidden flex-col gap-1 text-sm text-wiki-muted" id="media-folder-new">Новая папка
+    <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="text" id="media-folder" placeholder="например screenshots" spellcheck="false">
+  </label>
+  <label class="mb-2 flex flex-col gap-1 text-sm text-wiki-muted">Имя файла
+    <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="text" id="media-name" spellcheck="false">
+  </label>
+  <label class="mb-3 flex flex-col gap-1 text-sm text-wiki-muted">Подпись (alt)
+    <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="text" id="media-alt">
+  </label>
+  <p class="mb-2 hidden text-sm text-wiki-danger" id="media-upload-error"></p>
+  <button class="wiki-btn" type="button" id="media-upload">Загрузить и вставить</button>
+</dialog>
+
+<dialog class="m-auto w-[min(36rem,calc(100vw-2rem))] max-h-[min(40rem,calc(100vh-2rem))] overflow-auto rounded-sm border border-wiki-line bg-white p-4 text-wiki-ink shadow-lg backdrop:bg-black/30" id="media-pick-dialog">
+  <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
+    <h2 class="m-0 font-serif text-xl font-normal">Из загруженных</h2>
+    <button class="inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-2 py-1 text-sm" value="cancel" type="submit">Закрыть</button>
+  </form>
+  <p class="mb-2 hidden text-sm text-wiki-danger" id="media-list-error"></p>
+  <p class="mt-0 mb-2 text-sm text-wiki-muted" id="media-list-empty">Пока нет файлов.</p>
+  <ul class="m-0 list-none space-y-2 p-0" id="media-list"></ul>
+  <nav class="mt-3 hidden items-center justify-between gap-2" id="media-pager">
+    <button class="inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-2 py-1 text-sm disabled:cursor-default disabled:opacity-40" type="button" id="media-page-prev">Назад</button>
+    <span class="text-sm text-wiki-muted" id="media-page-label"></span>
+    <button class="inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-2 py-1 text-sm disabled:cursor-default disabled:opacity-40" type="button" id="media-page-next">Дальше</button>
+  </nav>
+</dialog>
 {{end}}

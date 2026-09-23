@@ -3,21 +3,9 @@
 {{template "error" .Error}}
 {{template "notice" .Notice}}
 
-{{template "section" "Новый пользователь"}}
-<form method="POST" action="/users">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="action" value="create">
-  <div class="grid items-start gap-x-8 md:grid-cols-2">
-  {{template "field" (dict "Label" "Имя" "Type" "text" "Name" "first_name" "Required" true "Max" 80 "Autocomplete" "off")}}
-  {{template "field" (dict "Label" "Фамилия" "Type" "text" "Name" "last_name" "Required" true "Max" 80 "Autocomplete" "off")}}
-  {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Required" true "Autocomplete" "off")}}
-  {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "new-password")}}
-  </div>
-  {{template "check" (dict "Name" "admin" "Value" "1" "Label" "Администратор")}}
-  {{template "actions-start"}}
-    {{template "button" (dict "Type" "submit" "Label" "Создать")}}
-  {{template "actions-end"}}
-</form>
+<div class="mb-4">
+  <button class="wiki-btn" type="button" data-open-dialog="user-create-dialog" data-reset-form="user-create-form">Новый пользователь</button>
+</div>
 
 {{template "table-start"}}
     {{template "th" "Имя"}}
@@ -29,30 +17,87 @@
     {{template "tr-start"}}
         {{template "td-start" "Имя"}}{{.FirstName}} {{.LastName}}{{template "td-end"}}
         {{template "td-start" "Почта"}}{{.Email}}{{template "td-end"}}
-        {{template "td-start" "Статус"}}{{if .Admin}}администратор{{end}}{{if .Blocked}}заблокирован{{end}}{{template "td-end"}}
+        {{template "td-start" "Статус"}}{{if .Admin}}администратор{{end}}{{if and .Admin .Blocked}}, {{end}}{{if .Blocked}}заблокирован{{end}}{{template "td-end"}}
         {{template "td-start" "Действия"}}
             <div class="flex flex-wrap items-center gap-1.5">
+            <button class="wiki-btn" type="button" data-user-edit data-email="{{.Email}}" data-first="{{.FirstName}}" data-last="{{.LastName}}" data-admin="{{if .Admin}}1{{end}}" data-blocked="{{if .Blocked}}1{{end}}" data-self="{{if .Self}}1{{end}}">Изменить</button>
             {{if .Self}}
-            <span>это вы</span>
+            <span class="text-sm text-wiki-muted">это вы</span>
             {{else}}
-            <form method="POST" action="/users" class="m-0">
-              <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <input type="hidden" name="email" value="{{.Email}}">
-              {{if .Blocked}}
-              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "unblock" "Label" "Разблокировать")}}
-              {{else}}
-              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "block" "Label" "Заблокировать")}}
-              {{end}}
-            </form>
-            <form method="POST" action="/users" class="m-0">
-              <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <input type="hidden" name="email" value="{{.Email}}">
-              {{template "button" (dict "Type" "submit" "Name" "action" "Value" "delete" "Label" "Удалить")}}
-            </form>
+            <button class="wiki-btn" type="button" data-user-delete data-email="{{.Email}}" data-name="{{.FirstName}} {{.LastName}}">Удалить</button>
             {{end}}
             </div>
         {{template "td-end"}}
     {{template "tr-end"}}
     {{end}}
 {{template "table-end"}}
+
+<dialog class="wiki-dialog" id="user-create-dialog">
+  <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
+    <h2 class="m-0 font-serif text-xl font-normal">Новый пользователь</h2>
+    <button class="wiki-btn" value="cancel" type="submit">Закрыть</button>
+  </form>
+  {{if eq .Form "create"}}{{template "error" .Error}}{{end}}
+  <form method="POST" action="/users" id="user-create-form">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="create">
+    <div class="grid items-start gap-x-8 md:grid-cols-2">
+    {{template "field" (dict "Label" "Имя" "Type" "text" "Name" "first_name" "Value" (and (eq .Form "create") .Draft.FirstName) "Required" true "Max" 80 "Autocomplete" "off")}}
+    {{template "field" (dict "Label" "Фамилия" "Type" "text" "Name" "last_name" "Value" (and (eq .Form "create") .Draft.LastName) "Required" true "Max" 80 "Autocomplete" "off")}}
+    {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Value" (and (eq .Form "create") .Draft.Email) "Required" true "Autocomplete" "off")}}
+    {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "new-password")}}
+    </div>
+    {{template "check" (dict "Name" "admin" "Value" "1" "Label" "Администратор" "Checked" (and (eq .Form "create") .Draft.Admin))}}
+    {{template "actions-start"}}
+      <button class="wiki-btn wiki-btn-solid" type="submit">Создать</button>
+    {{template "actions-end"}}
+  </form>
+</dialog>
+
+<dialog class="wiki-dialog" id="user-edit-dialog">
+  <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
+    <h2 class="m-0 font-serif text-xl font-normal">Редактирование</h2>
+    <button class="wiki-btn" value="cancel" type="submit">Закрыть</button>
+  </form>
+  {{if eq .Form "update"}}{{template "error" .Error}}{{end}}
+  <form method="POST" action="/users" id="user-edit-form">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="original_email" value="{{if eq .Form "update"}}{{.Draft.OriginalEmail}}{{end}}">
+    <div class="grid items-start gap-x-8 md:grid-cols-2">
+    {{template "field" (dict "Label" "Имя" "Type" "text" "Name" "first_name" "Value" (and (eq .Form "update") .Draft.FirstName) "Required" true "Max" 80 "Autocomplete" "off")}}
+    {{template "field" (dict "Label" "Фамилия" "Type" "text" "Name" "last_name" "Value" (and (eq .Form "update") .Draft.LastName) "Required" true "Max" 80 "Autocomplete" "off")}}
+    {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Value" (and (eq .Form "update") .Draft.Email) "Required" true "Autocomplete" "off")}}
+    </div>
+    {{template "check" (dict "Name" "admin" "Value" "1" "Label" "Администратор" "Checked" (and (eq .Form "update") .Draft.Admin))}}
+    <div id="user-edit-blocked"{{if and (eq .Form "update") .Draft.Self}} hidden{{end}}>
+      {{template "check" (dict "Name" "blocked" "Value" "1" "Label" "Заблокирован" "Checked" (and (eq .Form "update") .Draft.Blocked))}}
+    </div>
+    <div id="user-edit-password"{{if and (eq .Form "update") .Draft.Self}} hidden{{end}}>
+      {{template "field" (dict "Label" "Новый пароль" "Type" "password" "Name" "password" "Autocomplete" "new-password" "Placeholder" "оставьте пустым, чтобы не менять")}}
+    </div>
+    {{template "actions-start"}}
+      <button class="wiki-btn wiki-btn-solid" type="submit">Сохранить</button>
+    {{template "actions-end"}}
+  </form>
+</dialog>
+
+<dialog class="wiki-dialog" id="user-delete-dialog">
+  <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
+    <h2 class="m-0 font-serif text-xl font-normal">Удаление</h2>
+    <button class="wiki-btn" value="cancel" type="submit">Закрыть</button>
+  </form>
+  {{if eq .Form "delete"}}{{template "error" .Error}}{{end}}
+  <p class="mt-0 mb-4" id="user-delete-label">Удалить {{if .Draft.FirstName}}{{.Draft.FirstName}} {{.Draft.LastName}}{{else if .Draft.Email}}{{.Draft.Email}}{{end}}?</p>
+  <form method="POST" action="/users" id="user-delete-form">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="email" value="{{if eq .Form "delete"}}{{.Draft.Email}}{{end}}">
+    <div class="flex flex-wrap items-center gap-2">
+      <button class="wiki-btn wiki-btn-solid" type="submit">Удалить</button>
+      <button class="wiki-btn" type="button" data-close-dialog="user-delete-dialog">Отмена</button>
+    </div>
+  </form>
+</dialog>
+<div hidden data-open-on-load="{{if eq .Form "create"}}user-create-dialog{{else if eq .Form "update"}}user-edit-dialog{{else if eq .Form "delete"}}user-delete-dialog{{end}}"></div>
 {{end}}

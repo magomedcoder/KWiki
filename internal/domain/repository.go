@@ -31,9 +31,15 @@ type BranchRepository interface {
 type ContentRepository interface {
 	ListMarkdown(ctx context.Context, branch string) ([]ContentFile, error)
 
+	ListPrefix(ctx context.Context, branch, prefix string) ([]ContentFile, error)
+
+	Exists(ctx context.Context, branch, path string) (bool, error)
+
 	Read(ctx context.Context, branch, path string) ([]byte, error)
 
 	Write(ctx context.Context, branch, path string, content []byte, message string) error
+
+	WriteBatch(ctx context.Context, branch string, changes []ContentChange, message string) error
 
 	RemoveBranch(ctx context.Context, branch string) error
 

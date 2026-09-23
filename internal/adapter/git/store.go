@@ -83,13 +83,34 @@ func ensureInitialCommit(repo *git.Repository, root string) error {
 }
 
 func (s *Store) ListMarkdown(ctx context.Context, branch string) ([]domain.ContentFile, error) {
+	files, err := s.ListPrefix(ctx, branch, "")
+	if err != nil {
+		return nil, err
+	}
+
+	out := files[:0]
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, ".md") {
+			out = append(out, file)
+		}
+	}
+
+	return out, nil
+}
+
+func (s *Store) ListPrefix(ctx context.Context, branch, prefix string) ([]domain.ContentFile, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	prefix, err := branchPrefix(branch)
+	branchPref, err := branchPrefix(branch)
 	if err != nil {
 		return nil, err
+	}
+
+	prefix = strings.TrimPrefix(filepath.ToSlash(prefix), "/")
+	if strings.Contains(prefix, "..") || strings.Contains(prefix, `\`) {
+		return nil, domain.ErrInvalidSlug
 	}
 
 	s.mu.Lock()
@@ -102,11 +123,16 @@ func (s *Store) ListMarkdown(ctx context.Context, branch string) ([]domain.Conte
 
 	var files []domain.ContentFile
 	err = tree.Files().ForEach(func(f *object.File) error {
-		if !strings.HasPrefix(f.Name, prefix) || !strings.HasSuffix(f.Name, ".md") {
+		if !strings.HasPrefix(f.Name, branchPref) {
 			return nil
 		}
-		rel := strings.TrimPrefix(f.Name, prefix)
+
+		rel := strings.TrimPrefix(f.Name, branchPref)
 		if rel == "" || strings.Contains(rel, "..") {
+			return nil
+		}
+
+		if prefix != "" && !strings.HasPrefix(rel, prefix) {
 			return nil
 		}
 		files = append(files, domain.ContentFile{
@@ -117,6 +143,19 @@ func (s *Store) ListMarkdown(ctx context.Context, branch string) ([]domain.Conte
 		return nil
 	})
 	return files, err
+}
+
+func (s *Store) Exists(ctx context.Context, branch, path string) (bool, error) {
+	_, err := s.Read(ctx, branch, path)
+	if errors.Is(err, domain.ErrNotFound) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (s *Store) Read(ctx context.Context, branch, path string) ([]byte, error) {
@@ -141,13 +180,18 @@ func (s *Store) Read(ctx context.Context, branch, path string) ([]byte, error) {
 }
 
 func (s *Store) Write(ctx context.Context, branch, relPath string, content []byte, message string) error {
+	return s.WriteBatch(ctx, branch, []domain.ContentChange{{
+		Path: relPath,
+		Data: content,
+	}}, message)
+}
+
+func (s *Store) WriteBatch(ctx context.Context, branch string, changes []domain.ContentChange, message string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-
-	full, err := joinBranch(branch, relPath)
-	if err != nil {
-		return err
+	if len(changes) == 0 {
+		return nil
 	}
 
 	s.mu.Lock()
@@ -157,8 +201,25 @@ func (s *Store) Write(ctx context.Context, branch, relPath string, content []byt
 	if err != nil {
 		return err
 	}
-	if err := s.writeFile(wt, full, content); err != nil {
-		return err
+
+	for _, change := range changes {
+		full, err := joinBranch(branch, change.Path)
+		if err != nil {
+			return err
+		}
+
+		if change.Delete {
+			if _, err := wt.Remove(full); err != nil {
+				return err
+			}
+
+			_ = os.Remove(filepath.Join(s.root, filepath.FromSlash(full)))
+			continue
+		}
+
+		if err := s.writeFile(wt, full, change.Data); err != nil {
+			return err
+		}
 	}
 
 	return s.commit(wt, message)

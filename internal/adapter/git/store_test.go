@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/magomedcoder/kwiki/internal/domain"
 )
 
 func TestBranchFilesAndRelocate(t *testing.T) {
@@ -80,5 +82,51 @@ func TestBranchFilesAndRelocate(t *testing.T) {
 	mainFiles, err = store.ListMarkdown(ctx, "main")
 	if err != nil || len(mainFiles) != 1 {
 		t.Fatalf("основная после удаления = %+v, ошибка = %v", mainFiles, err)
+	}
+}
+
+func TestWriteBatchMedia(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.WriteBatch(ctx, "main", []domain.ContentChange{
+		{
+			Path: "home.md",
+			Data: []byte("# Home"),
+		},
+		{
+			Path: "media/a.png",
+			Data: []byte("png"),
+		},
+	}, "создание с медиа")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exists, err := store.Exists(ctx, "main", "media/a.png")
+	if err != nil || !exists {
+		t.Fatalf("exists=%v err=%v", exists, err)
+	}
+
+	files, err := store.ListPrefix(ctx, "main", "media/")
+	if err != nil || len(files) != 1 || files[0].Path != "media/a.png" {
+		t.Fatalf("%+v %v", files, err)
+	}
+
+	if err := store.WriteBatch(ctx, "main", []domain.ContentChange{
+		{
+			Path:   "media/a.png",
+			Delete: true,
+		},
+	}, "удаление медиа"); err != nil {
+		t.Fatal(err)
+	}
+
+	exists, err = store.Exists(ctx, "main", "media/a.png")
+	if err != nil || exists {
+		t.Fatalf("exists=%v err=%v", exists, err)
 	}
 }

@@ -101,6 +101,36 @@ func (r *Repository) FindByID(ctx context.Context, id string) (domain.User, erro
 	return toUser(row), nil
 }
 
+func (r *Repository) UpdateProfile(ctx context.Context, id, firstName, lastName, email string) error {
+	res := r.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", id).Updates(map[string]any{
+		"first_name": firstName,
+		"last_name":  lastName,
+		"email":      email,
+	})
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) || strings.Contains(res.Error.Error(), "UNIQUE") {
+			return domain.ErrEmailTaken
+		}
+
+		return res.Error
+	}
+
+	if res.RowsAffected > 0 {
+		return nil
+	}
+
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", id).Count(&n).Error; err != nil {
+		return err
+	}
+
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
 func (r *Repository) UpdatePasswordHash(ctx context.Context, id, hash string) error {
 	res := r.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", id).Update("password_hash", hash)
 	if res.Error != nil {

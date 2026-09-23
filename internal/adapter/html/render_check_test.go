@@ -48,10 +48,8 @@ func TestComponentsKeepMarkup(t *testing.T) {
 	})
 	page := httptest.NewRecorder()
 	view.Page(page, usecase.PageScreen{
-		PageView: usecase.PageView{
-			Title:    "Тема",
-			Markdown: "Текст\n\n- пункт\n",
-		},
+		Title:    "Тема",
+		Markdown: "Текст\n\n- пункт\n",
 		EditHref: "/edit",
 	}, actor)
 	fresh := httptest.NewRecorder()
@@ -81,17 +79,30 @@ func TestComponentsKeepMarkup(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(edit.Body.String(), `src="/js/main.js"`) || !strings.Contains(edit.Body.String(), "data-before=\"**\"") {
+	if !strings.Contains(edit.Body.String(), `src="/js/main.js"`) || !strings.Contains(edit.Body.String(), "data-before=\"**\"") || !strings.Contains(edit.Body.String(), `id="media-folder-pick"`) || !strings.Contains(edit.Body.String(), `data-media-open="upload"`) || !strings.Contains(edit.Body.String(), `data-media-open="pick"`) {
 		t.Fatal("редактор потерял скрипт или кнопки")
 	}
 
 	usersBody := users.Body.String()
-	if !strings.Contains(usersBody, "Новая страница") || !strings.Contains(usersBody, "Ветки") || !strings.Contains(login.Body.String(), "Войти") {
+	if !strings.Contains(usersBody, "Новая страница") || !strings.Contains(usersBody, "Ветки") || !strings.Contains(usersBody, "Сменить пароль") || !strings.Contains(usersBody, `id="user-create-dialog"`) || !strings.Contains(usersBody, `id="user-edit-dialog"`) || !strings.Contains(usersBody, `id="user-delete-dialog"`) || !strings.Contains(usersBody, `id="password-dialog"`) || !strings.Contains(login.Body.String(), "Войти") || !strings.Contains(login.Body.String(), "login-card") {
 		t.Fatal("шапка или форма входа собраны не так")
 	}
 
 	if strings.Contains(usersBody, `aria-label="Содержание"`) {
 		t.Fatal("служебная страница показывает оглавление")
+	}
+
+	branches := httptest.NewRecorder()
+	view.Branches(branches, usecase.BranchesPage{
+		Branches: []domain.Branch{
+			{
+				Name:   "main",
+				Public: true,
+			},
+		},
+	}, actor)
+	if !strings.Contains(branches.Body.String(), `id="branch-create-dialog"`) || !strings.Contains(branches.Body.String(), "Новая ветка") || strings.Contains(branches.Body.String(), "no value") {
+		t.Fatal("окно новой ветки собрано не так")
 	}
 
 	if strings.Contains(page.Body.String(), "max-w-[46rem]") || strings.Contains(page.Body.String(), "max-w-5xl") {
@@ -100,23 +111,21 @@ func TestComponentsKeepMarkup(t *testing.T) {
 
 	guest := httptest.NewRecorder()
 	view.Page(guest, usecase.PageScreen{
-		PageView: usecase.PageView{
-			Title:    "Введение",
-			Slug:     "intro",
-			Branch:   "docs",
-			Markdown: "Текст\n\n## Установка\n\n### Шаг\n",
-			Public:   true,
-			Revisions: []domain.Revision{{
-				Hash:      "deadbeef",
-				Message:   "правка",
-				CreatedAt: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC),
-			}},
-		},
+		Title:    "Введение",
+		Slug:     "intro",
+		Branch:   "docs",
+		Markdown: "Текст\n\n## Установка\n\n### Шаг\n",
+		Public:   true,
+		Revisions: []domain.Revision{{
+			Hash:      "deadbeef",
+			Message:   "правка",
+			CreatedAt: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC),
+		}},
 		HistoryHref: "/history?branch=docs&slug=intro",
 		Indexable:   true,
 	}, usecase.Actor{})
 	body := guest.Body.String()
-	if strings.Contains(body, "no value") || strings.Contains(body, "Новая страница") || strings.Contains(body, "Выйти") || strings.Contains(body, "Править") || strings.Contains(body, "deadbeef") {
+	if strings.Contains(body, "no value") || strings.Contains(body, "Новая страница") || strings.Contains(body, "Выйти") || strings.Contains(body, "Сменить пароль") || strings.Contains(body, "Править") || strings.Contains(body, "deadbeef") {
 		t.Fatal("гостевая страница показывает правку, выход или историю")
 	}
 
@@ -134,14 +143,12 @@ func TestComponentsKeepMarkup(t *testing.T) {
 
 	home := httptest.NewRecorder()
 	view.Page(home, usecase.PageScreen{
-		PageView: usecase.PageView{
-			Title:    "Обзор",
-			Slug:     "README",
-			Branch:   "main",
-			Markdown: "Текст",
-			Public:   true,
-		},
-		Home: true,
+		Title:    "Обзор",
+		Slug:     "README",
+		Branch:   "main",
+		Markdown: "Текст",
+		Public:   true,
+		Home:     true,
 	}, actor)
 	homeBody := home.Body.String()
 	if strings.Contains(homeBody, `href="true"`) || strings.Contains(homeBody, `href="false"`) || !strings.Contains(homeBody, `href="/"`) {
@@ -150,14 +157,12 @@ func TestComponentsKeepMarkup(t *testing.T) {
 
 	history := httptest.NewRecorder()
 	view.History(history, usecase.PageScreen{
-		PageView: usecase.PageView{
-			Title: "Введение", Slug: "intro", Branch: "docs",
-			Revisions: []domain.Revision{{
-				Hash:      "deadbeef",
-				Message:   "правка",
-				CreatedAt: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC),
-			}},
-		},
+		Title: "Введение", Slug: "intro", Branch: "docs",
+		Revisions: []domain.Revision{{
+			Hash:      "deadbeef",
+			Message:   "правка",
+			CreatedAt: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC),
+		}},
 		ReadHref: "/b/docs/intro",
 		EditHref: "/edit?branch=docs&slug=intro",
 	}, usecase.Actor{})

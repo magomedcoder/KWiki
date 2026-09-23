@@ -19,4 +19,7 @@ var (
 	ErrInvalidBranch      = errors.New("некорректное имя ветки")
 	ErrBranchTaken        = errors.New("ветка уже есть")
 	ErrDefaultBranch      = errors.New("нельзя удалить основную ветку")
+	ErrInvalidMediaPath   = errors.New("некорректный путь медиа")
+	ErrMediaExists        = errors.New("файл уже есть")
+	ErrMediaTooLarge      = errors.New("файл больше 2 МБ")
 )

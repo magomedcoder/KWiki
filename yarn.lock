@@ -154,7 +154,7 @@
     "@parcel/watcher-win32-ia32" "2.5.1"
     "@parcel/watcher-win32-x64" "2.5.1"
 
-"@tailwindcss/cli@^4.1.13":
+"@tailwindcss/cli@^4.3.3":
   version "4.3.3"
   resolved "https://registry.yarnpkg.com/@tailwindcss/cli/-/cli-4.3.3.tgz#763edd474c2f43ce82cdcedc80c0b3b23a86ba6f"
   integrity sha512-ZvS/n1ZHOBKcVlhkt8l5NNr1EDXk1NboYO5CYDOs6NUmvT9z6bzkwsosaJftY57T/3gWNzWMJzIXLodZC8ssdw==
@@ -265,7 +265,7 @@
     "@tailwindcss/oxide-win32-arm64-msvc" "4.3.3"
     "@tailwindcss/oxide-win32-x64-msvc" "4.3.3"
 
-"@tailwindcss/typography@^0.5.16":
+"@tailwindcss/typography@^0.5.20":
   version "0.5.20"
   resolved "https://registry.yarnpkg.com/@tailwindcss/typography/-/typography-0.5.20.tgz#9feb7fb1d5f2f7b5360c22e24651210db74c34df"
   integrity sha512-hwbzQuNUfcPvbegQFatVPl/MY/tcM9KLl963hQ5laJKPh81TEZ1+dNG9PirGvcaDBkp+BCshExAyKVPW91dozw==
@@ -465,7 +465,7 @@ source-map-js@^1.2.1:
   resolved "https://registry.yarnpkg.com/source-map-js/-/source-map-js-1.2.1.tgz#1ce5650fddd87abc099eda37dcff024c2667ae46"
   integrity sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==
 
-tailwindcss@4.3.3, tailwindcss@^4.1.13:
+tailwindcss@4.3.3, tailwindcss@^4.3.3:
   version "4.3.3"
   resolved "https://registry.yarnpkg.com/tailwindcss/-/tailwindcss-4.3.3.tgz#c006861611c213c1877893ab5b23daa16be2bb55"
   integrity sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==

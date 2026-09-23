@@ -52,6 +52,7 @@ func main() {
 	}
 
 	wiki := usecase.New(db, db, content)
+	wiki.SetStagingRoot(paths.Staging)
 	if err := wiki.EnsureDefault(context.Background()); err != nil {
 		log.Fatalf("ветки: %v", err)
 	}

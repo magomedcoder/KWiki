@@ -1,15 +1,13 @@
 {{define "content"}}
-{{template "title" "Вход"}}
-{{template "error" .Error}}
-<form method="POST" action="/login">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="next" value="{{.Next}}">
-  <div class="grid items-start gap-x-8 md:grid-cols-2">
-  {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Value" .Value "Required" true "Autocomplete" "username" "Autofocus" true "Spellcheck" false)}}
-  {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "current-password")}}
-  </div>
-  {{template "actions-start"}}
-    {{template "button" (dict "Type" "submit" "Label" "Войти")}}
-  {{template "actions-end"}}
-</form>
+<div class="login-card mx-auto w-full max-w-[22rem] py-6">
+  <p class="m-0 font-serif text-[1.85rem] leading-tight text-wiki-ink">Вход</p>
+  {{template "error" .Error}}
+  <form method="POST" action="/login" class="mt-2">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="next" value="{{.Next}}">
+    {{template "field" (dict "Label" "Почта" "Type" "email" "Name" "email" "Value" .Value "Required" true "Autocomplete" "username" "Autofocus" true "Spellcheck" false)}}
+    {{template "field" (dict "Label" "Пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "current-password")}}
+    <button class="mt-2 inline-flex min-h-10 w-full cursor-pointer items-center justify-center rounded-sm border border-wiki-line bg-wiki-well px-3 py-1.5 text-sm text-wiki-ink hover:border-wiki-muted hover:bg-white" type="submit">Войти</button>
+  </form>
+</div>
 {{end}}

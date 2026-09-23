@@ -35,4 +35,147 @@
   h1, h2, h3, h4, h5, h6 {
     scroll-margin-top: 4.5rem;
   }
+
+  dialog {
+    position: fixed;
+    inset: 0;
+    height: fit-content;
+    margin: auto;
+  }
+}
+
+@layer components {
+  .wiki-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--color-wiki-line-soft);
+    border-radius: 0.45rem;
+    background: #fff;
+    color: var(--color-wiki-ink);
+    font-size: 0.875rem;
+    line-height: 1.2;
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(32, 33, 34, 0.05);
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  }
+
+  .wiki-btn:hover {
+    border-color: var(--color-wiki-line);
+    background: var(--color-wiki-bg);
+  }
+
+  .wiki-btn[data-active] {
+    border-color: var(--color-wiki-muted);
+    background: var(--color-wiki-bg);
+    font-weight: 600;
+  }
+
+  .wiki-btn-solid {
+    border-color: var(--color-wiki-ink);
+    background: var(--color-wiki-ink);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .wiki-btn.wiki-btn-solid:hover {
+    border-color: #2c2d2e;
+    background: #2c2d2e;
+    color: #fff;
+  }
+
+  .wiki-dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: min(40rem, calc(100vh - 2rem));
+    overflow: auto;
+    border: 1px solid var(--color-wiki-line-soft);
+    border-radius: 0.7rem;
+    background: #fff;
+    color: var(--color-wiki-ink);
+    padding: 1.1rem 1.15rem 1.2rem;
+    box-shadow: 0 18px 40px rgba(32, 33, 34, 0.16);
+  }
+
+  .wiki-dialog::backdrop {
+    background: rgba(32, 33, 34, 0.38);
+  }
+
+  .account-menu > summary {
+    list-style: none;
+  }
+
+  .account-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .account-menu-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 14rem;
+    min-height: 2.25rem;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 0.45rem;
+    color: var(--color-wiki-ink);
+    cursor: pointer;
+  }
+
+  .account-menu-name::-webkit-details-marker {
+    display: none;
+  }
+
+  .account-menu[open] > .account-menu-name,
+  .account-menu-name:hover {
+    border-color: var(--color-wiki-line-soft);
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(32, 33, 34, 0.05);
+  }
+
+  .account-menu-name::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-0.12rem) rotate(45deg);
+  }
+
+  .account-menu[open] > .account-menu-name::after {
+    transform: translateY(0.12rem) rotate(225deg);
+  }
+
+  .account-menu-panel {
+    position: absolute;
+    right: 0;
+    z-index: 60;
+    min-width: 12.5rem;
+    margin-top: 0.35rem;
+    padding: 0.35rem;
+    border: 1px solid var(--color-wiki-line-soft);
+    border-radius: 0.55rem;
+    background: #fff;
+    box-shadow: 0 10px 28px rgba(32, 33, 34, 0.12);
+  }
+
+  .account-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    min-height: 2.15rem;
+    padding: 0.35rem 0.7rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--color-wiki-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .account-menu-item:hover {
+    background: var(--color-wiki-bg);
+  }
 }

@@ -14,7 +14,7 @@ func TestSaveAndViewPage(t *testing.T) {
 	ctx := context.Background()
 	svc, _, content, _ := newWiki(t)
 
-	slug, err := svc.SavePage(ctx, domain.DefaultBranch, "/guides/intro/", "# Привет\n\nТекст страницы")
+	slug, err := svc.SavePage(ctx, domain.DefaultBranch, "/guides/intro/", "# Привет\n\nТекст страницы", "")
 	if err != nil {
 		t.Fatalf("сохранение: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestSaveAndViewPage(t *testing.T) {
 		t.Fatalf("правки = %+v", view.Revisions)
 	}
 
-	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "guides/intro", "# Ещё"); err != nil {
+	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "guides/intro", "# Ещё", ""); err != nil {
 		t.Fatalf("второе сохранение: %v", err)
 	}
 	if content.messages[1] != "правка: main/guides/intro" {
@@ -55,11 +55,11 @@ func TestBranchesIsolatePages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.SavePage(ctx, "docs", "home", "публично"); err != nil {
+	if _, err := svc.SavePage(ctx, "docs", "home", "публично", ""); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "home", "скрыто"); err != nil {
+	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "home", "скрыто", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +107,7 @@ func TestDeleteBranchRemovesPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.SavePage(ctx, "docs", "home", "текст"); err != nil {
+	if _, err := svc.SavePage(ctx, "docs", "home", "текст", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +149,7 @@ func TestEditForm(t *testing.T) {
 		t.Fatalf("новая форма = %+v, ошибка = %v", form, err)
 	}
 
-	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "home", "текст"); err != nil {
+	if _, err := svc.SavePage(ctx, domain.DefaultBranch, "home", "текст", ""); err != nil {
 		t.Fatalf("сохранение: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestEditForm(t *testing.T) {
 
 func TestSaveRejectsEmptySlug(t *testing.T) {
 	svc, _, _, _ := newWiki(t)
-	_, err := svc.SavePage(context.Background(), domain.DefaultBranch, "///", "x")
+	_, err := svc.SavePage(context.Background(), domain.DefaultBranch, "///", "x", "")
 	if !errors.Is(err, domain.ErrInvalidSlug) {
 		t.Fatalf("ошибка = %v", err)
 	}
@@ -288,20 +288,46 @@ func contentKey(branch, path string) string {
 }
 
 func (m *memContent) ListMarkdown(_ context.Context, branch string) ([]domain.ContentFile, error) {
-	prefix := branch + "\x00"
+	files, err := m.ListPrefix(context.Background(), branch, "")
+	if err != nil {
+		return nil, err
+	}
+
+	out := files[:0]
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, ".md") {
+			out = append(out, file)
+		}
+	}
+
+	return out, nil
+}
+
+func (m *memContent) ListPrefix(_ context.Context, branch, prefix string) ([]domain.ContentFile, error) {
+	prefixKey := branch + "\x00"
 	var out []domain.ContentFile
 	for key, data := range m.files {
-		if !strings.HasPrefix(key, prefix) {
+		if !strings.HasPrefix(key, prefixKey) {
+			continue
+		}
+
+		path := strings.TrimPrefix(key, prefixKey)
+		if prefix != "" && !strings.HasPrefix(path, prefix) {
 			continue
 		}
 		out = append(out, domain.ContentFile{
-			Path: strings.TrimPrefix(key, prefix),
+			Path: path,
 			Hash: hashOf(data),
 			Size: int64(len(data)),
 		})
 	}
 
 	return out, nil
+}
+
+func (m *memContent) Exists(_ context.Context, branch, path string) (bool, error) {
+	_, ok := m.files[contentKey(branch, path)]
+	return ok, nil
 }
 
 func (m *memContent) Read(_ context.Context, branch, path string) ([]byte, error) {
@@ -314,7 +340,22 @@ func (m *memContent) Read(_ context.Context, branch, path string) ([]byte, error
 }
 
 func (m *memContent) Write(_ context.Context, branch, path string, content []byte, message string) error {
-	m.files[contentKey(branch, path)] = append([]byte(nil), content...)
+	return m.WriteBatch(context.Background(), branch, []domain.ContentChange{{
+		Path: path,
+		Data: content,
+	}}, message)
+}
+
+func (m *memContent) WriteBatch(_ context.Context, branch string, changes []domain.ContentChange, message string) error {
+	for _, change := range changes {
+		key := contentKey(branch, change.Path)
+		if change.Delete {
+			delete(m.files, key)
+			continue
+		}
+		m.files[key] = append([]byte(nil), change.Data...)
+	}
+
 	m.messages = append(m.messages, message)
 	return nil
 }

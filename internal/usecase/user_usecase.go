@@ -47,10 +47,22 @@ type ManagedUser struct {
 	Self      bool
 }
 
+type UserDraft struct {
+	Email         string
+	OriginalEmail string
+	FirstName     string
+	LastName      string
+	Admin         bool
+	Blocked       bool
+	Self          bool
+}
+
 type UsersPage struct {
 	Users  []ManagedUser
 	Error  string
 	Notice string
+	Form   string
+	Draft  UserDraft
 }
 
 type IssuedSession struct {
@@ -157,6 +169,128 @@ func (a *UserUseCase) ListUsers(ctx context.Context, actorID string) ([]ManagedU
 	}
 
 	return out, nil
+}
+
+func (a *UserUseCase) UpdateUser(ctx context.Context, actorID, currentEmail string, account Account, blocked bool) error {
+	user, err := a.userByEmail(ctx, currentEmail)
+	if err != nil {
+		return err
+	}
+
+	firstName, err := domain.NormalizeName(account.FirstName)
+	if err != nil {
+		return err
+	}
+
+	lastName, err := domain.NormalizeName(account.LastName)
+	if err != nil {
+		return err
+	}
+
+	normalized, err := domain.NormalizeEmail(account.Email)
+	if err != nil {
+		return err
+	}
+
+	self := actorID != "" && actorID == user.ID
+	if self && blocked && !user.Blocked {
+		return domain.ErrSelfAction
+	}
+
+	var hash string
+	if account.Password != "" {
+		if err := domain.ValidatePassword(normalized, account.Password); err != nil {
+			return err
+		}
+		hash, err = a.passwords.Hash(account.Password)
+		if err != nil {
+			return err
+		}
+	}
+
+	demote := user.Admin && !account.Admin
+	blockNow := !self && blocked && !user.Blocked && user.Admin
+	if user.Admin && (demote || blockNow) {
+		other, err := a.hasAnotherActiveAdmin(ctx, user.ID)
+		if err != nil {
+			return err
+		}
+
+		if !other {
+			return domain.ErrLastAdmin
+		}
+	}
+
+	if normalized != user.Email {
+		if _, err := a.users.FindByEmail(ctx, normalized); err == nil {
+			return domain.ErrEmailTaken
+		} else if !errors.Is(err, domain.ErrNotFound) {
+			return err
+		}
+	}
+
+	if err := a.users.UpdateProfile(ctx, user.ID, firstName, lastName, normalized); err != nil {
+		return err
+	}
+
+	if account.Admin != user.Admin {
+		if err := a.users.SetAdmin(ctx, user.ID, account.Admin); err != nil {
+			return err
+		}
+	}
+
+	if !self && blocked != user.Blocked {
+		if err := a.users.SetBlocked(ctx, user.ID, blocked); err != nil {
+			return err
+		}
+
+		if blocked {
+			if err := a.sessions.DeleteByUser(ctx, user.ID); err != nil {
+				return err
+			}
+		}
+	}
+
+	if hash == "" {
+		return nil
+	}
+
+	if err := a.users.UpdatePasswordHash(ctx, user.ID, hash); err != nil {
+		return err
+	}
+
+	return a.sessions.DeleteByUser(ctx, user.ID)
+}
+
+func (a *UserUseCase) ChangeOwnPassword(ctx context.Context, userID, current, next string) error {
+	user, err := a.users.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	ok, err := a.verify(current, user.PasswordHash)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return domain.ErrInvalidCredentials
+	}
+
+	if err := domain.ValidatePassword(user.Email, next); err != nil {
+		return err
+	}
+
+	hash, err := a.passwords.Hash(next)
+	if err != nil {
+		return err
+	}
+
+	if err := a.users.UpdatePasswordHash(ctx, user.ID, hash); err != nil {
+		return err
+	}
+
+	return a.sessions.DeleteByUser(ctx, user.ID)
 }
 
 func (a *UserUseCase) DeleteUser(ctx context.Context, actorID, email string) error {

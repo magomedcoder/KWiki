@@ -1,4 +1,26 @@
 (function () {
+  const i18nNode = document.getElementById("kwiki-i18n");
+  let messages = {};
+  if (i18nNode && i18nNode.textContent) {
+    try {
+      messages = JSON.parse(i18nNode.textContent) || {};
+    } catch (err) {
+      messages = {};
+    }
+  }
+  function t(key) {
+    return messages[key] || key;
+  }
+  function tf(key) {
+    let out = t(key);
+    for (let i = 1; i < arguments.length; i += 1) {
+      out = out.replace("%s", arguments[i]);
+    }
+    return out;
+  }
+  window.kwikiT = t;
+  window.kwikiTf = tf;
+
   function openDialog(id) {
     const dialog = document.getElementById(id);
     if (dialog && typeof dialog.showModal === "function" && !dialog.open) {
@@ -76,7 +98,10 @@
       }
 
       if (label) {
-        label.textContent = "Удалить " + (button.getAttribute("data-name") || button.getAttribute("data-email") || "пользователя") + "?";
+        label.textContent = tf(
+          "js.users.delete_confirm",
+          button.getAttribute("data-name") || button.getAttribute("data-email") || t("js.users.delete_fallback")
+        );
       }
 
       openDialog("user-delete-dialog");
@@ -122,13 +147,13 @@
         }
         return response.text().then(function (text) {
           if (error) {
-            error.textContent = (text || "").trim() || "Не удалось сменить пароль";
+            error.textContent = (text || "").trim() || t("js.password_failed");
             error.hidden = false;
           }
         });
       }).catch(function () {
         if (error) {
-          error.textContent = "Не удалось сменить пароль";
+          error.textContent = t("js.password_failed");
           error.hidden = false;
         }
       }).finally(function () {
@@ -141,6 +166,8 @@
 })();
 
 (function () {
+  const t = window.kwikiT || function (key) { return key; };
+  const tf = window.kwikiTf || function (key) { return key; };
   const form = document.querySelector("form.editor");
   if (!form) {
     return;
@@ -291,7 +318,7 @@
 
   function setNameFromFile() {
     if (!fileInput.files || !fileInput.files[0]) {
-      fileChosen.textContent = "Файл не выбран";
+      fileChosen.textContent = t("js.media.no_file");
       return;
     }
     const file = fileInput.files[0];
@@ -337,7 +364,7 @@
     folderPick.innerHTML = "";
     const root = document.createElement("option");
     root.value = "";
-    root.textContent = "Корень";
+    root.textContent = t("js.media.root");
     folderPick.appendChild(root);
     names.forEach(function (name) {
       const option = document.createElement("option");
@@ -347,7 +374,7 @@
     });
     const created = document.createElement("option");
     created.value = "__new__";
-    created.textContent = "Новая папка…";
+    created.textContent = t("js.media.new_folder");
     folderPick.appendChild(created);
     if (current === "__new__" || current === "" || folders[current]) {
       folderPick.value = current;
@@ -426,24 +453,24 @@
       li.className = "flex flex-wrap items-center justify-between gap-2 border border-wiki-line-soft bg-wiki-well px-2.5 py-2 text-sm";
       const meta = document.createElement("div");
       meta.className = "min-w-0 break-all";
-      meta.textContent = item.Path + (item.Staged ? " (черновик)" : "");
+      meta.textContent = item.Path + (item.Staged ? t("js.media.staged") : "");
       const actions = document.createElement("div");
       actions.className = "flex flex-wrap gap-1.5";
       const insert = document.createElement("button");
       insert.type = "button";
       insert.className = "inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-white px-2 py-1";
-      insert.textContent = "Вставить";
+      insert.textContent = t("js.media.insert");
       insert.addEventListener("click", function () {
-        const alt = window.prompt("Подпись (alt)", item.Name || "") || item.Name || "";
+        const alt = window.prompt(t("js.media.alt_prompt"), item.Name || "") || item.Name || "";
         insertMediaMarkdown(item.Ref || item.Name, alt);
         pickDialog.close();
       });
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-danger-line bg-wiki-danger-bg px-2 py-1 text-wiki-danger";
-      remove.textContent = "Удалить";
+      remove.textContent = t("js.media.delete");
       remove.addEventListener("click", function () {
-        if (!window.confirm("Удалить " + item.Path + "?")) {
+        if (!window.confirm(tf("js.media.delete_confirm", item.Path))) {
           return;
         }
         fetch("/media?branch=" + encodeURIComponent(branchName()) + "&path=" + encodeURIComponent(item.Path) + "&csrf=" + encodeURIComponent(csrf.value), {
@@ -455,7 +482,7 @@
           }
           return fetchMedia().then(renderList);
         }).catch(function () {
-          showListError("Не удалось удалить файл");
+          showListError(t("js.media.delete_failed"));
         });
       });
       actions.appendChild(insert);
@@ -474,7 +501,7 @@
         altInput.dataset.touched = "";
         showDialog(uploadDialog);
         fetchMedia().then(fillFolders).catch(function () {
-          showUploadError("Не удалось загрузить список папок");
+          showUploadError(t("js.media.folders_failed"));
         });
         return;
       }
@@ -482,7 +509,7 @@
       mediaPage = 0;
       showDialog(pickDialog);
       fetchMedia().then(renderList).catch(function () {
-        showListError("Не удалось загрузить список");
+        showListError(t("js.media.list_failed"));
       });
     });
   });
@@ -491,16 +518,16 @@
     showUploadError("");
     const file = fileInput.files && fileInput.files[0];
     if (!file) {
-      showUploadError("Выберите файл");
+      showUploadError(t("js.media.choose_file"));
       return Promise.resolve();
     }
     if (file.size > maxMedia) {
-      showUploadError("Файл больше 2 МБ");
+      showUploadError(t("js.media.too_large"));
       return Promise.resolve();
     }
     const name = (nameInput.value || file.name || "").trim();
     if (!name) {
-      showUploadError("Укажите имя файла");
+      showUploadError(t("js.media.name_required"));
       return Promise.resolve();
     }
 
@@ -520,14 +547,14 @@
       credentials: "same-origin"
     }).then(function (response) {
       if (response.status === 409) {
-        if (window.confirm("Файл уже есть. Перезаписать?")) {
+        if (window.confirm(t("js.media.exists_overwrite"))) {
           return upload(true);
         }
-        showUploadError("Файл уже есть");
+        showUploadError(t("js.media.exists"));
         return null;
       }
       if (response.status === 413) {
-        showUploadError("Файл больше 2 МБ");
+        showUploadError(t("js.media.too_large"));
         return null;
       }
       if (!response.ok) {
@@ -541,7 +568,7 @@
       const alt = (altInput.value || item.Name || name).trim();
       insertMediaMarkdown(item.Ref || item.Name, alt);
       fileInput.value = "";
-      fileChosen.textContent = "Файл не выбран";
+      fileChosen.textContent = t("js.media.no_file");
       uploadDialog.close();
     });
   }
@@ -549,7 +576,7 @@
   uploadBtn.addEventListener("click", function () {
     uploadBtn.disabled = true;
     upload(false).catch(function () {
-      showUploadError("Не удалось загрузить файл");
+      showUploadError(t("js.media.upload_failed"));
     }).finally(function () {
       uploadBtn.disabled = false;
     });

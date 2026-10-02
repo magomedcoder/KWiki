@@ -10,7 +10,7 @@ import (
 )
 
 func TestEditShowsLivePreview(t *testing.T) {
-	view, err := Load()
+	view, err := Load(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestEditShowsLivePreview(t *testing.T) {
 		Branch:  domain.DefaultBranch,
 		Content: "# Привет\n\n**жирный**",
 		IsNew:   true,
-	}, nil, usecase.Actor{CSRF: "token"})
+	}, nil, usecase.Actor{CSRF: "token"}, "ru")
 
 	body := rec.Body.String()
 	if !strings.Contains(body, `id="привет"`) || !strings.Contains(body, ">Привет</h1>") || !strings.Contains(body, "<strong>жирный</strong>") {

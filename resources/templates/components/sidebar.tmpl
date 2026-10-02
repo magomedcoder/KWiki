@@ -1,6 +1,6 @@
 {{define "sidebar"}}
-<nav class="wiki-toc max-md:fixed max-md:top-24 max-md:bottom-0 max-md:left-0 max-md:z-40 max-md:w-[min(18rem,86vw)] max-md:-translate-x-[105%] max-md:overflow-auto max-md:border-r max-md:border-wiki-line max-md:bg-white max-md:px-3 max-md:pt-3 max-md:pb-5 max-md:transition-transform max-md:group-has-[.nav-toggle:checked]:translate-x-0 motion-reduce:transition-none md:sticky md:top-13 md:h-[calc(100vh-3.25rem)] md:overflow-auto md:border-r md:border-wiki-line-soft md:bg-wiki-bg md:px-3 md:py-4 print:hidden" id="wiki-nav" aria-label="Содержание">
-    <p class="mb-1 px-2.5 text-xs tracking-wider text-wiki-faint uppercase">Содержание</p>
+<nav class="wiki-toc max-md:fixed max-md:top-24 max-md:bottom-0 max-md:left-0 max-md:z-40 max-md:w-[min(18rem,86vw)] max-md:-translate-x-[105%] max-md:overflow-auto max-md:border-r max-md:border-wiki-line max-md:bg-white max-md:px-3 max-md:pt-3 max-md:pb-5 max-md:transition-transform max-md:group-has-[.nav-toggle:checked]:translate-x-0 motion-reduce:transition-none md:sticky md:top-13 md:h-[calc(100vh-3.25rem)] md:overflow-auto md:border-r md:border-wiki-line-soft md:bg-wiki-bg md:px-3 md:py-4 print:hidden" id="wiki-nav" aria-label="{{ t .Lang "nav.toc" }}">
+    <p class="mb-1 px-2.5 text-xs tracking-wider text-wiki-faint uppercase">{{ t .Lang "nav.toc" }}</p>
     <ul class="m-0 list-none p-0">
         {{range .Headings}}
         <li>

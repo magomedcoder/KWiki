@@ -1,5 +1,5 @@
 {{define "content"}}
-{{template "title" "Страница не найдена"}}
-<p class="text-wiki-muted">На данный момент содержимое на этой странице отсутствует.</p>
-<p class="mt-4"><a class="text-wiki-link underline underline-offset-2" href="{{.Home}}">На главную</a></p>
+{{template "title" (t .Lang "page.not_found")}}
+<p class="text-wiki-muted">{{ t .Lang "page.not_found_body" }}</p>
+<p class="mt-4"><a class="text-wiki-link underline underline-offset-2" href="{{.Home}}">{{ t .Lang "common.home" }}</a></p>
 {{end}}

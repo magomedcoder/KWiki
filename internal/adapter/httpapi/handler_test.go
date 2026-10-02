@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/magomedcoder/kwiki/internal/adapter/i18n"
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
+	"github.com/magomedcoder/kwiki/resources"
 )
 
 func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
@@ -26,10 +28,10 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 		},
 	}
 	view := &stubView{}
-	h := New(&stubWiki{}, auth, view, true, "README")
+	h := New(&stubWiki{}, auth, view, true, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
-	srv := h.Protect(mux)
+	srv := h.Protect(h.WithLang(mux))
 
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/guides/intro", nil))
@@ -77,7 +79,7 @@ func TestAnonymousRedirectAndSecureCookie(t *testing.T) {
 func TestEditRequiresCSRF(t *testing.T) {
 	auth := &stubAuth{actor: usecase.Actor{Email: "admin@example.com", CSRF: "session-csrf"}}
 	wiki := &stubWiki{}
-	h := New(wiki, auth, &stubView{}, false, "README")
+	h := New(wiki, auth, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -266,41 +268,50 @@ type stubView struct {
 	previewed string
 }
 
-func (s *stubView) Index(_ http.ResponseWriter, view usecase.IndexView, _ usecase.Actor) {
+func (s *stubView) Index(_ http.ResponseWriter, view usecase.IndexView, _ usecase.Actor, _ string) {
 	s.index = view
 }
 
-func (s *stubView) Page(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor) {
+func (s *stubView) Page(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor, _ string) {
 	s.page = view
 }
 
-func (stubView) Edit(http.ResponseWriter, usecase.EditForm, []domain.Branch, usecase.Actor) {}
+func (stubView) Edit(http.ResponseWriter, usecase.EditForm, []domain.Branch, usecase.Actor, string) {}
 
-func (s *stubView) Preview(w http.ResponseWriter, content, _ string) {
+func (s *stubView) Preview(w http.ResponseWriter, content, _, _ string) {
 	s.previewed = content
 	_, _ = w.Write([]byte(content))
 }
 
-func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor) {}
+func (stubView) Users(http.ResponseWriter, usecase.UsersPage, usecase.Actor, string) {}
 
-func (stubView) Branches(http.ResponseWriter, usecase.BranchesPage, usecase.Actor) {}
+func (stubView) Branches(http.ResponseWriter, usecase.BranchesPage, usecase.Actor, string) {}
 
-func (stubView) NotFound(w http.ResponseWriter, _ usecase.Actor) {
+func (stubView) NotFound(w http.ResponseWriter, _ usecase.Actor, _ string) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func (s *stubView) History(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor) {
+func (s *stubView) History(_ http.ResponseWriter, view usecase.PageScreen, _ usecase.Actor, _ string) {
 	s.page = view
 }
 
-func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage) {
+func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage, _ string) {
 	s.login = page
+}
+
+func testBundle(t *testing.T) *i18n.Bundle {
+	t.Helper()
+	bundle, err := i18n.Load(resources.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bundle
 }
 
 func TestEditPreviewRequiresCSRF(t *testing.T) {
 	view := &stubView{}
 	auth := &stubAuth{actor: usecase.Actor{Email: "admin@example.com", CSRF: "session-csrf"}}
-	h := New(&stubWiki{}, auth, view, false, "README")
+	h := New(&stubWiki{}, auth, view, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := h.Protect(mux)
@@ -326,7 +337,7 @@ func TestEditPreviewRequiresCSRF(t *testing.T) {
 
 func TestHistoryPage(t *testing.T) {
 	view := &stubView{}
-	h := New(&stubWiki{}, &stubAuth{}, view, false, "README")
+	h := New(&stubWiki{}, &stubAuth{}, view, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := h.Protect(mux)
@@ -351,7 +362,7 @@ func TestHistoryPage(t *testing.T) {
 }
 
 func TestMissingPublicPageIsNotFound(t *testing.T) {
-	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -369,7 +380,7 @@ func TestMissingPublicPageIsNotFound(t *testing.T) {
 }
 
 func TestFaviconDoesNotOpenLogin(t *testing.T) {
-	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -382,7 +393,7 @@ func TestFaviconDoesNotOpenLogin(t *testing.T) {
 
 func TestPublicBranchIsIndexed(t *testing.T) {
 	view := &stubView{}
-	h := New(&stubWiki{}, &stubAuth{}, view, true, "README")
+	h := New(&stubWiki{}, &stubAuth{}, view, true, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -464,7 +475,7 @@ func publicPageListed(pages []usecase.PageLink, href string, current bool) bool 
 
 func TestBranchRootShowsHomeFile(t *testing.T) {
 	view := &stubView{}
-	h := New(&stubWiki{}, &stubAuth{}, view, true, "README")
+	h := New(&stubWiki{}, &stubAuth{}, view, true, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -491,7 +502,7 @@ func TestChangePasswordClearsSession(t *testing.T) {
 			CSRF:  "session-csrf",
 		},
 	}
-	h := New(&stubWiki{}, auth, &stubView{}, false, "README")
+	h := New(&stubWiki{}, auth, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := h.Protect(mux)
@@ -527,7 +538,7 @@ func TestChangePasswordClearsSession(t *testing.T) {
 }
 
 func TestEmbeddedAssets(t *testing.T) {
-	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -547,6 +558,34 @@ func TestEmbeddedAssets(t *testing.T) {
 	mux.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/css/missing.css", nil))
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("чужой файл %d", missing.Code)
+	}
+}
+
+func TestSetLangCookie(t *testing.T) {
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
+	mux := http.NewServeMux()
+	h.Register(mux)
+	srv := h.Protect(h.WithLang(mux))
+
+	req := httptest.NewRequest(http.MethodPost, "/lang", strings.NewReader("lang=en"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "http://example.test/login")
+	req.Host = "example.test"
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+		t.Fatalf("код %d адрес %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	var langCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == i18n.LangCookie {
+			langCookie = c
+		}
+	}
+
+	if langCookie == nil || langCookie.Value != "en" || langCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("кука %+v", langCookie)
 	}
 }
 

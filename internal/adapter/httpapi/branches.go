@@ -12,17 +12,17 @@ import (
 func (h *Handler) branches(w http.ResponseWriter, r *http.Request) {
 	actor := actorFrom(r)
 	if !actor.Admin {
-		http.Error(w, "недостаточно прав", http.StatusForbidden)
+		http.Error(w, h.t(r, "errors.forbidden"), http.StatusForbidden)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		h.renderBranches(w, r, "", branchNotice(r.URL.Query().Get("notice")), http.StatusOK, "", "", false)
+		h.renderBranches(w, r, "", h.branchNotice(r, r.URL.Query().Get("notice")), http.StatusOK, "", "", false)
 	case http.MethodPost:
 		h.submitBranch(w, r)
 	default:
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 	}
 }
 
@@ -46,15 +46,15 @@ func (h *Handler) submitBranch(w http.ResponseWriter, r *http.Request) {
 		err = h.wiki.DeleteBranch(r.Context(), r.FormValue("name"))
 		notice = "deleted"
 	default:
-		http.Error(w, "некорректный запрос", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
-		message, status := branchFailure(err)
+		message, status := h.branchFailure(r, err)
 		if status == http.StatusInternalServerError {
 			log.Printf("ветка: %v", err)
-			http.Error(w, "ошибка веток", status)
+			http.Error(w, h.t(r, "errors.branches"), status)
 			return
 		}
 		h.renderBranches(w, r, message, "", status, action, name, public)
@@ -68,7 +68,7 @@ func (h *Handler) renderBranches(w http.ResponseWriter, r *http.Request, message
 	branches, err := h.wiki.ListBranches(r.Context())
 	if err != nil {
 		log.Printf("список веток: %v", err)
-		http.Error(w, "ошибка веток", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.branches"), http.StatusInternalServerError)
 		return
 	}
 
@@ -82,34 +82,34 @@ func (h *Handler) renderBranches(w http.ResponseWriter, r *http.Request, message
 			Name:   name,
 			Public: public,
 		},
-	}, actorFrom(r))
+	}, actorFrom(r), langFrom(r))
 }
 
-func branchFailure(err error) (string, int) {
+func (h *Handler) branchFailure(r *http.Request, err error) (string, int) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidBranch):
-		return "Некорректное имя ветки. Латинские буквы, цифры и дефис, до 32 символов.", http.StatusBadRequest
+		return h.t(r, "errors.invalid_branch"), http.StatusBadRequest
 	case errors.Is(err, domain.ErrBranchTaken):
-		return "Ветка с таким именем уже есть.", http.StatusConflict
+		return h.t(r, "errors.branch_taken"), http.StatusConflict
 	case errors.Is(err, domain.ErrDefaultBranch):
-		return "Нельзя удалить основную ветку.", http.StatusConflict
+		return h.t(r, "errors.default_branch"), http.StatusConflict
 	case errors.Is(err, domain.ErrNotFound):
-		return "Ветка не найдена.", http.StatusNotFound
+		return h.t(r, "errors.branch_missing"), http.StatusNotFound
 	default:
 		return "", http.StatusInternalServerError
 	}
 }
 
-func branchNotice(code string) string {
+func (h *Handler) branchNotice(r *http.Request, code string) string {
 	switch code {
 	case "created":
-		return "Ветка создана."
+		return h.t(r, "notice.branch_created")
 	case "public":
-		return "Ветка открыта для всех и для поисковых систем."
+		return h.t(r, "notice.branch_public")
 	case "private":
-		return "Ветка снова видна только после входа."
+		return h.t(r, "notice.branch_private")
 	case "deleted":
-		return "Ветка удалена."
+		return h.t(r, "notice.branch_deleted")
 	default:
 		return ""
 	}

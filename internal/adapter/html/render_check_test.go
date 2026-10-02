@@ -12,7 +12,7 @@ import (
 )
 
 func TestComponentsKeepMarkup(t *testing.T) {
-	view, err := Load()
+	view, err := Load(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestComponentsKeepMarkup(t *testing.T) {
 		Slug:    "sun",
 		Content: "# Hi\n",
 		IsNew:   false,
-	}, nil, actor)
+	}, nil, actor, "ru")
 	users := httptest.NewRecorder()
 	view.Users(users, usecase.UsersPage{
 		Users: []usecase.ManagedUser{
@@ -41,17 +41,17 @@ func TestComponentsKeepMarkup(t *testing.T) {
 				Admin:     true,
 			},
 		},
-	}, actor)
+	}, actor, "ru")
 	login := httptest.NewRecorder()
 	view.Login(login, usecase.LoginPage{
 		CSRF: "token",
-	})
+	}, "ru")
 	page := httptest.NewRecorder()
 	view.Page(page, usecase.PageScreen{
 		Title:    "Тема",
 		Markdown: "Текст\n\n- пункт\n",
 		EditHref: "/edit",
-	}, actor)
+	}, actor, "ru")
 	fresh := httptest.NewRecorder()
 	view.Edit(fresh, usecase.EditForm{
 		Branch: "main",
@@ -61,7 +61,7 @@ func TestComponentsKeepMarkup(t *testing.T) {
 			Name:   "main",
 			Public: true,
 		},
-	}, actor)
+	}, actor, "ru")
 
 	for name, body := range map[string]string{
 		"edit":  edit.Body.String(),
@@ -100,7 +100,7 @@ func TestComponentsKeepMarkup(t *testing.T) {
 				Public: true,
 			},
 		},
-	}, actor)
+	}, actor, "ru")
 	if !strings.Contains(branches.Body.String(), `id="branch-create-dialog"`) || !strings.Contains(branches.Body.String(), "Новая ветка") || strings.Contains(branches.Body.String(), "no value") {
 		t.Fatal("окно новой ветки собрано не так")
 	}
@@ -123,7 +123,7 @@ func TestComponentsKeepMarkup(t *testing.T) {
 		}},
 		HistoryHref: "/history?branch=docs&slug=intro",
 		Indexable:   true,
-	}, usecase.Actor{})
+	}, usecase.Actor{}, "ru")
 	body := guest.Body.String()
 	if strings.Contains(body, "no value") || strings.Contains(body, "Новая страница") || strings.Contains(body, "Выйти") || strings.Contains(body, "Сменить пароль") || strings.Contains(body, "Править") || strings.Contains(body, "deadbeef") {
 		t.Fatal("гостевая страница показывает правку, выход или историю")
@@ -149,7 +149,7 @@ func TestComponentsKeepMarkup(t *testing.T) {
 		Markdown: "Текст",
 		Public:   true,
 		Home:     true,
-	}, actor)
+	}, actor, "ru")
 	homeBody := home.Body.String()
 	if strings.Contains(homeBody, `href="true"`) || strings.Contains(homeBody, `href="false"`) || !strings.Contains(homeBody, `href="/"`) {
 		t.Fatal("ссылка на главную указывает на true или false")
@@ -165,15 +165,21 @@ func TestComponentsKeepMarkup(t *testing.T) {
 		}},
 		ReadHref: "/b/docs/intro",
 		EditHref: "/edit?branch=docs&slug=intro",
-	}, usecase.Actor{})
+	}, usecase.Actor{}, "ru")
 	historyBody := history.Body.String()
 	if !strings.Contains(historyBody, "deadbeef") || !strings.Contains(historyBody, "История: Введение") || !strings.Contains(historyBody, `href="/b/docs/intro"`) || strings.Contains(historyBody, "Править") {
 		t.Fatal("страница истории собрана не так")
 	}
 
 	missing := httptest.NewRecorder()
-	view.NotFound(missing, usecase.Actor{})
+	view.NotFound(missing, usecase.Actor{}, "ru")
 	if missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "Страница не найдена") || !strings.Contains(missing.Body.String(), `href="/"`) {
 		t.Fatalf("страница 404: код %d", missing.Code)
+	}
+
+	en := httptest.NewRecorder()
+	view.Login(en, usecase.LoginPage{CSRF: "token"}, "en")
+	if !strings.Contains(en.Body.String(), "Sign in") || !strings.Contains(en.Body.String(), `lang="en"`) {
+		t.Fatal("английская локаль не применилась")
 	}
 }

@@ -2,6 +2,7 @@ package html
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/magomedcoder/kwiki/internal/adapter/i18n"
 	"github.com/magomedcoder/kwiki/internal/adapter/markdown"
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
@@ -20,6 +22,7 @@ import (
 var reTags = regexp.MustCompile(`>\s+<`)
 
 type Renderer struct {
+	bundle   *i18n.Bundle
 	index    *template.Template
 	page     *template.Template
 	edit     *template.Template
@@ -43,6 +46,10 @@ type shell struct {
 	Description string
 	Modified    string
 	Headings    []markdown.Heading
+	Lang        string
+	Locale      string
+	Languages   []i18n.Language
+	ClientI18n  template.JS
 }
 
 type indexData struct {
@@ -88,21 +95,16 @@ type loginData struct {
 	Value string
 }
 
-var templateFuncs = template.FuncMap{
-	"dict": dict,
-	"list": list,
-}
-
 func dict(values ...any) (map[string]any, error) {
 	if len(values)%2 != 0 {
-		return nil, errors.New("dict: нечётное число аргументов")
+		return nil, errors.New("dict: odd argument count")
 	}
 
 	out := make(map[string]any, len(values)/2)
 	for i := 0; i < len(values); i += 2 {
 		key, ok := values[i].(string)
 		if !ok {
-			return nil, errors.New("dict: ключ не строка")
+			return nil, errors.New("dict: key is not a string")
 		}
 		out[key] = values[i+1]
 	}
@@ -114,7 +116,17 @@ func list(values ...any) []any {
 	return values
 }
 
-func parsePage(fsys fs.FS, page string) (*template.Template, error) {
+func (r *Renderer) funcs() template.FuncMap {
+	return template.FuncMap{
+		"dict": dict,
+		"list": list,
+		"t": func(lang, key string, args ...any) string {
+			return r.bundle.T(lang, key, args...)
+		},
+	}
+}
+
+func (r *Renderer) parsePage(fsys fs.FS, page string) (*template.Template, error) {
 	components, err := fs.Glob(fsys, "templates/components/*.tmpl")
 	if err != nil {
 		return nil, err
@@ -124,80 +136,78 @@ func parsePage(fsys fs.FS, page string) (*template.Template, error) {
 		"templates/layout.tmpl",
 		"templates/pages/" + page,
 	}, components...)
-	return template.New("layout.tmpl").Funcs(templateFuncs).Option("missingkey=zero").ParseFS(fsys, files...)
+	return template.New("layout.tmpl").Funcs(r.funcs()).Option("missingkey=zero").ParseFS(fsys, files...)
 }
 
-func Load() (*Renderer, error) {
-	return loadFS(resources.FS)
+func Load(bundle *i18n.Bundle) (*Renderer, error) {
+	if bundle == nil {
+		var err error
+		bundle, err = i18n.Load(resources.FS)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return loadFS(resources.FS, bundle)
 }
 
-func loadFS(fsys fs.FS) (*Renderer, error) {
-	index, err := parsePage(fsys, "index.tmpl")
-	if err != nil {
+func loadFS(fsys fs.FS, bundle *i18n.Bundle) (*Renderer, error) {
+	r := &Renderer{bundle: bundle}
+	var err error
+	if r.index, err = r.parsePage(fsys, "index.tmpl"); err != nil {
 		return nil, err
 	}
 
-	page, err := parsePage(fsys, "page.tmpl")
-	if err != nil {
+	if r.page, err = r.parsePage(fsys, "page.tmpl"); err != nil {
 		return nil, err
 	}
 
-	edit, err := parsePage(fsys, "edit.tmpl")
-	if err != nil {
+	if r.edit, err = r.parsePage(fsys, "edit.tmpl"); err != nil {
 		return nil, err
 	}
 
-	login, err := parsePage(fsys, "login.tmpl")
-	if err != nil {
+	if r.login, err = r.parsePage(fsys, "login.tmpl"); err != nil {
 		return nil, err
 	}
 
-	users, err := parsePage(fsys, "users.tmpl")
-	if err != nil {
+	if r.users, err = r.parsePage(fsys, "users.tmpl"); err != nil {
 		return nil, err
 	}
 
-	branches, err := parsePage(fsys, "branches.tmpl")
-	if err != nil {
+	if r.branches, err = r.parsePage(fsys, "branches.tmpl"); err != nil {
 		return nil, err
 	}
 
-	notFound, err := parsePage(fsys, "notfound.tmpl")
-	if err != nil {
+	if r.notFound, err = r.parsePage(fsys, "notfound.tmpl"); err != nil {
 		return nil, err
 	}
 
-	history, err := parsePage(fsys, "history.tmpl")
-	if err != nil {
+	if r.history, err = r.parsePage(fsys, "history.tmpl"); err != nil {
 		return nil, err
 	}
-
-	return &Renderer{
-		index:    index,
-		page:     page,
-		edit:     edit,
-		login:    login,
-		users:    users,
-		branches: branches,
-		notFound: notFound,
-		history:  history,
-	}, nil
+	return r, nil
 }
 
-func actorShell(title string, actor usecase.Actor) shell {
+func (r *Renderer) actorShell(title string, actor usecase.Actor, lang string) shell {
+	lang = r.bundle.Resolve(lang, "")
+	raw, _ := json.Marshal(r.bundle.ClientMessages(lang))
 	return shell{
-		Title:   title,
-		Email:   actor.Email,
-		Name:    actor.Name,
-		Admin:   actor.Admin,
-		CSRF:    actor.CSRF,
-		Home:    "/",
-		NewHref: "/edit",
+		Title:      title,
+		Email:      actor.Email,
+		Name:       actor.Name,
+		Admin:      actor.Admin,
+		CSRF:       actor.CSRF,
+		Home:       "/",
+		NewHref:    "/edit",
+		Lang:       lang,
+		Locale:     r.bundle.Locale(lang),
+		Languages:  r.bundle.Languages(),
+		ClientI18n: template.JS(raw),
 	}
 }
 
-func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor usecase.Actor) {
-	frame := actorShell(view.Title, actor)
+func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor usecase.Actor, lang string) {
+	frame := r.actorShell(view.Title, actor, lang)
 	frame.Indexable = view.Indexable
 	frame.Canonical = view.Canonical
 	frame.Description = view.Description
@@ -205,14 +215,14 @@ func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor us
 		frame.Home = domain.PagePath(view.Branch, "")
 		frame.NewHref = domain.EditPath(view.Branch, "")
 	}
-	exec(w, r.index, indexData{
+	r.exec(w, r.index, indexData{
 		shell:    frame,
 		Catalog:  view.Catalog,
 		Branches: view.Branches,
-	})
+	}, lang)
 }
 
-func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor) {
+func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor, lang string) {
 	var body template.HTML
 	var headings []markdown.Heading
 	if !view.Missing {
@@ -228,7 +238,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 		}
 	}
 
-	frame := actorShell(view.Title, actor)
+	frame := r.actorShell(view.Title, actor, lang)
 	frame.Indexable = view.Indexable
 	frame.Canonical = view.Canonical
 	frame.Description = view.Description
@@ -239,7 +249,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 		frame.Modified = view.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 
-	exec(w, r.page, pageData{
+	r.exec(w, r.page, pageData{
 		shell:       frame,
 		Slug:        view.Slug,
 		Body:        body,
@@ -249,26 +259,26 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 		HistoryHref: view.HistoryHref,
 		IsHome:      view.Home,
 		Branches:    view.Branches,
-	})
+	}, lang)
 }
 
-func (r *Renderer) History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor) {
-	frame := actorShell("История: "+view.Title, actor)
+func (r *Renderer) History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor, lang string) {
+	frame := r.actorShell(r.bundle.T(lang, "page.history_title", view.Title), actor, lang)
 	frame.Home = domain.PagePath(view.Branch, "")
 	frame.NewHref = domain.EditPath(view.Branch, "")
-	exec(w, r.history, historyData{
+	r.exec(w, r.history, historyData{
 		shell:     frame,
 		Revisions: view.Revisions,
 		EditHref:  view.EditHref,
 		ReadHref:  view.ReadHref,
-	})
+	}, lang)
 }
 
-func (r *Renderer) NotFound(w http.ResponseWriter, actor usecase.Actor) {
-	frame := actorShell("Страница не найдена", actor)
+func (r *Renderer) NotFound(w http.ResponseWriter, actor usecase.Actor, lang string) {
+	frame := r.actorShell(r.bundle.T(lang, "page.not_found"), actor, lang)
 	var buf bytes.Buffer
 	if err := r.notFound.ExecuteTemplate(&buf, "layout.tmpl", frame); err != nil {
-		http.Error(w, "ошибка шаблона", http.StatusInternalServerError)
+		http.Error(w, r.bundle.T(lang, "errors.template"), http.StatusInternalServerError)
 		log.Printf("ошибка шаблона: %v", err)
 		return
 	}
@@ -278,76 +288,77 @@ func (r *Renderer) NotFound(w http.ResponseWriter, actor usecase.Actor) {
 	_, _ = w.Write([]byte(minifyHTML(buf.String())))
 }
 
-func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor) {
-	title := "Новая страница"
+func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor, lang string) {
+	title := r.bundle.T(lang, "page.new_title")
 	if !form.IsNew {
-		title = "Редактирование: " + form.Slug
+		title = r.bundle.T(lang, "page.edit_title", form.Slug)
 	}
 
-	frame := actorShell(title, actor)
+	frame := r.actorShell(title, actor, lang)
 	frame.Home = domain.PagePath(form.Branch, "")
 	frame.NewHref = domain.EditPath(form.Branch, "")
 	cancel := domain.PagePath(form.Branch, "")
 	if form.Slug != "" {
 		cancel = domain.PagePath(form.Branch, form.Slug)
 	}
-	exec(w, r.edit, editData{
+	r.exec(w, r.edit, editData{
 		shell:    frame,
 		Branch:   form.Branch,
 		Slug:     form.Slug,
 		Content:  form.Content,
 		IsNew:    form.IsNew,
 		Branches: branches,
-		Preview:  previewHTML(form.Content, form.Branch),
+		Preview:  r.previewHTML(form.Content, form.Branch, lang),
 		Cancel:   cancel,
-	})
+	}, lang)
 }
 
-func (r *Renderer) Preview(w http.ResponseWriter, content, branch string) {
-	_, _ = w.Write([]byte(previewHTML(content, branch)))
+func (r *Renderer) Preview(w http.ResponseWriter, content, branch, lang string) {
+	_, _ = w.Write([]byte(r.previewHTML(content, branch, lang)))
 }
 
-func previewHTML(content, branch string) template.HTML {
+func (r *Renderer) previewHTML(content, branch, lang string) template.HTML {
 	if strings.TrimSpace(content) == "" {
-		return `<p class="m-0 text-wiki-faint">Просмотр</p>`
+		return template.HTML(`<p class="m-0 text-wiki-faint">` + template.HTMLEscapeString(r.bundle.T(lang, "common.preview_empty")) + `</p>`)
 	}
 
 	return template.HTML(markdown.HTML([]byte(content), branch))
 }
 
-func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor) {
-	exec(w, r.users, struct {
+func (r *Renderer) Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor, lang string) {
+	r.exec(w, r.users, struct {
 		shell
 		usecase.UsersPage
 	}{
-		shell:     actorShell("Пользователи", actor),
+		shell:     r.actorShell(r.bundle.T(lang, "users.title"), actor, lang),
 		UsersPage: page,
-	})
+	}, lang)
 }
 
-func (r *Renderer) Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor) {
-	exec(w, r.branches, struct {
+func (r *Renderer) Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor, lang string) {
+	r.exec(w, r.branches, struct {
 		shell
 		usecase.BranchesPage
 	}{
-		shell:        actorShell("Ветки", actor),
+		shell:        r.actorShell(r.bundle.T(lang, "branches.title"), actor, lang),
 		BranchesPage: page,
-	})
+	}, lang)
 }
 
-func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage) {
-	exec(w, r.login, loginData{
-		Title: "Вход", CSRF: page.CSRF, Home: "/",
+func (r *Renderer) Login(w http.ResponseWriter, page usecase.LoginPage, lang string) {
+	frame := r.actorShell(r.bundle.T(lang, "auth.login"), usecase.Actor{CSRF: page.CSRF}, lang)
+	r.exec(w, r.login, loginData{
+		shell: frame,
 		Error: page.Error,
 		Next:  page.Next,
 		Value: page.Email,
-	})
+	}, lang)
 }
 
-func exec(w http.ResponseWriter, t *template.Template, data any) {
+func (r *Renderer) exec(w http.ResponseWriter, t *template.Template, data any, lang string) {
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout.tmpl", data); err != nil {
-		http.Error(w, "ошибка шаблона", http.StatusInternalServerError)
+		http.Error(w, r.bundle.T(lang, "errors.template"), http.StatusInternalServerError)
 		log.Printf("ошибка шаблона: %v", err)
 		return
 	}

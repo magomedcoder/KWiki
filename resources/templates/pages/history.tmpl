@@ -1,8 +1,8 @@
 {{define "content"}}
 {{if .Email}}
-  {{template "tabs" (list (dict "Label" "Читать" "Href" .ReadHref) (dict "Label" "Править" "Href" .EditHref) (dict "Label" "История" "Current" true))}}
+  {{template "tabs" (dict "Aria" (t .Lang "nav.page_actions") "Items" (list (dict "Label" (t .Lang "page.read") "Href" .ReadHref) (dict "Label" (t .Lang "page.edit") "Href" .EditHref) (dict "Label" (t .Lang "page.history") "Current" true)))}}
 {{else}}
-  {{template "tabs" (list (dict "Label" "Читать" "Href" .ReadHref) (dict "Label" "История" "Current" true))}}
+  {{template "tabs" (dict "Aria" (t .Lang "nav.page_actions") "Items" (list (dict "Label" (t .Lang "page.read") "Href" .ReadHref) (dict "Label" (t .Lang "page.history") "Current" true)))}}
 {{end}}
 {{template "title" .Title}}
 {{if .Revisions}}
@@ -12,6 +12,6 @@
   {{end}}
 </ul>
 {{else}}
-<p class="text-wiki-muted">Правок пока нет.</p>
+<p class="text-wiki-muted">{{ t .Lang "page.no_revisions" }}</p>
 {{end}}
 {{end}}

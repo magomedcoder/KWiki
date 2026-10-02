@@ -12,17 +12,17 @@ import (
 func (h *Handler) users(w http.ResponseWriter, r *http.Request) {
 	actor := actorFrom(r)
 	if !actor.Admin {
-		http.Error(w, "недостаточно прав", http.StatusForbidden)
+		http.Error(w, h.t(r, "errors.forbidden"), http.StatusForbidden)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		h.renderUsers(w, r, "", noticeText(r.URL.Query().Get("notice")), http.StatusOK, "", usecase.UserDraft{})
+		h.renderUsers(w, r, "", h.noticeText(r, r.URL.Query().Get("notice")), http.StatusOK, "", usecase.UserDraft{})
 	case http.MethodPost:
 		h.submitUsers(w, r, actor)
 	default:
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 	}
 }
 
@@ -68,14 +68,14 @@ func (h *Handler) submitUsers(w http.ResponseWriter, r *http.Request, actor usec
 		err = h.auth.SetBlocked(r.Context(), actor.ID, draft.Email, false)
 		notice = "unblocked"
 	default:
-		http.Error(w, "некорректный запрос", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 		return
 	}
 
 	if err != nil {
-		message, status := userFailure(err)
+		message, status := h.userFailure(r, err)
 		if status == http.StatusInternalServerError {
-			http.Error(w, "ошибка пользователей", status)
+			http.Error(w, h.t(r, "errors.users"), status)
 			return
 		}
 		h.renderUsers(w, r, message, "", status, action, draft)
@@ -87,12 +87,12 @@ func (h *Handler) submitUsers(w http.ResponseWriter, r *http.Request, actor usec
 
 func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
 	if r.FormValue("password") != r.FormValue("password_confirm") {
-		http.Error(w, "Пароли не совпадают.", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.password_mismatch"), http.StatusBadRequest)
 		return
 	}
 
@@ -100,13 +100,13 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	err := h.auth.ChangeOwnPassword(r.Context(), actor.ID, r.FormValue("current_password"), r.FormValue("password"))
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
-			http.Error(w, "Неверный текущий пароль.", http.StatusUnauthorized)
+			http.Error(w, h.t(r, "errors.wrong_current_password"), http.StatusUnauthorized)
 			return
 		}
 
-		message, status := userFailure(err)
+		message, status := h.userFailure(r, err)
 		if status == http.StatusInternalServerError {
-			http.Error(w, "ошибка смены пароля", status)
+			http.Error(w, h.t(r, "errors.password_change"), status)
 			return
 		}
 
@@ -122,7 +122,7 @@ func (h *Handler) renderUsers(w http.ResponseWriter, r *http.Request, message, n
 	actor := actorFrom(r)
 	users, err := h.auth.ListUsers(r.Context(), actor.ID)
 	if err != nil {
-		http.Error(w, "ошибка пользователей", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.users"), http.StatusInternalServerError)
 		return
 	}
 
@@ -147,42 +147,42 @@ func (h *Handler) renderUsers(w http.ResponseWriter, r *http.Request, message, n
 		Notice: notice,
 		Form:   action,
 		Draft:  draft,
-	}, actor)
+	}, actor, langFrom(r))
 }
 
-func userFailure(err error) (string, int) {
+func (h *Handler) userFailure(r *http.Request, err error) (string, int) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidName):
-		return "Укажите имя и фамилию.", http.StatusBadRequest
+		return h.t(r, "errors.invalid_name"), http.StatusBadRequest
 	case errors.Is(err, domain.ErrInvalidEmail):
-		return "Некорректная почта.", http.StatusBadRequest
+		return h.t(r, "errors.invalid_email"), http.StatusBadRequest
 	case errors.Is(err, domain.ErrWeakPassword):
-		return err.Error(), http.StatusBadRequest
+		return h.t(r, "errors.weak_password"), http.StatusBadRequest
 	case errors.Is(err, domain.ErrEmailTaken):
-		return "Пользователь с такой почтой уже есть.", http.StatusConflict
+		return h.t(r, "errors.email_taken"), http.StatusConflict
 	case errors.Is(err, domain.ErrNotFound):
-		return "Пользователь не найден.", http.StatusNotFound
+		return h.t(r, "errors.user_not_found"), http.StatusNotFound
 	case errors.Is(err, domain.ErrLastAdmin):
-		return "Нельзя снять права, удалить или заблокировать последнего администратора.", http.StatusConflict
+		return h.t(r, "errors.last_admin"), http.StatusConflict
 	case errors.Is(err, domain.ErrSelfAction):
-		return "Нельзя изменить свою учётную запись.", http.StatusConflict
+		return h.t(r, "errors.self_action"), http.StatusConflict
 	default:
 		return "", http.StatusInternalServerError
 	}
 }
 
-func noticeText(code string) string {
+func (h *Handler) noticeText(r *http.Request, code string) string {
 	switch code {
 	case "created":
-		return "Пользователь создан."
+		return h.t(r, "notice.user_created")
 	case "updated":
-		return "Пользователь сохранён."
+		return h.t(r, "notice.user_updated")
 	case "deleted":
-		return "Пользователь удалён."
+		return h.t(r, "notice.user_deleted")
 	case "blocked":
-		return "Пользователь заблокирован."
+		return h.t(r, "notice.user_blocked")
 	case "unblocked":
-		return "Блокировка снята."
+		return h.t(r, "notice.user_unblocked")
 	default:
 		return ""
 	}

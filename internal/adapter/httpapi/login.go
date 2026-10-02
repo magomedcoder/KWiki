@@ -11,7 +11,7 @@ import (
 
 func (h *Handler) favicon(w http.ResponseWriter, r *http.Request) {
 	markIndexable(w, false)
-	http.Error(w, "страница не найдена", http.StatusNotFound)
+	http.Error(w, h.t(r, "errors.not_found"), http.StatusNotFound)
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -22,7 +22,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.submitLogin(w, r)
 	default:
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 	}
 }
 
@@ -34,20 +34,20 @@ func (h *Handler) showLogin(w http.ResponseWriter, r *http.Request) {
 
 	issued, err := h.auth.BeginLogin(r.Context(), h.sessionToken(r), clientHint(r))
 	if err != nil {
-		http.Error(w, "ошибка входа", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.login"), http.StatusInternalServerError)
 		return
 	}
 	h.setCookie(w, r, issued.Token, issued.ExpiresAt)
 	h.view.Login(w, usecase.LoginPage{
 		CSRF: issued.CSRF,
 		Next: safeNext(r.URL.Query().Get("next")),
-	})
+	}, langFrom(r))
 }
 
 func (h *Handler) submitLogin(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "некорректный запрос", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 		return
 	}
 
@@ -70,9 +70,9 @@ func (h *Handler) submitLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) renderLoginError(w http.ResponseWriter, r *http.Request, reason error) {
-	message, status := loginFailure(reason)
+	message, status := h.loginFailure(r, reason)
 	if status == http.StatusInternalServerError {
-		http.Error(w, "ошибка входа", status)
+		http.Error(w, h.t(r, "errors.login"), status)
 		return
 	}
 	if !errors.Is(reason, domain.ErrCSRF) {
@@ -81,7 +81,7 @@ func (h *Handler) renderLoginError(w http.ResponseWriter, r *http.Request, reaso
 
 	issued, err := h.auth.BeginLogin(r.Context(), "", clientHint(r))
 	if err != nil {
-		http.Error(w, "ошибка входа", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.login"), http.StatusInternalServerError)
 		return
 	}
 	h.setCookie(w, r, issued.Token, issued.ExpiresAt)
@@ -91,19 +91,19 @@ func (h *Handler) renderLoginError(w http.ResponseWriter, r *http.Request, reaso
 		Email: r.FormValue("email"),
 		Next:  safeNext(r.FormValue("next")),
 		Error: message,
-	})
+	}, langFrom(r))
 }
 
-func loginFailure(err error) (string, int) {
+func (h *Handler) loginFailure(r *http.Request, err error) (string, int) {
 	switch {
 	case errors.Is(err, domain.ErrTooManyAttempts):
-		return "Слишком много попыток. Повторите позже.", http.StatusTooManyRequests
+		return h.t(r, "errors.too_many_attempts"), http.StatusTooManyRequests
 	case errors.Is(err, domain.ErrInvalidCredentials):
-		return "Неверная почта или пароль.", http.StatusUnauthorized
+		return h.t(r, "errors.invalid_credentials"), http.StatusUnauthorized
 	case errors.Is(err, domain.ErrBlocked):
-		return "Учётная запись заблокирована.", http.StatusForbidden
+		return h.t(r, "errors.blocked"), http.StatusForbidden
 	case errors.Is(err, domain.ErrCSRF):
-		return "Сессия формы истекла. Отправьте её ещё раз.", http.StatusBadRequest
+		return h.t(r, "errors.csrf"), http.StatusBadRequest
 	default:
 		return "", http.StatusInternalServerError
 	}
@@ -111,11 +111,11 @@ func loginFailure(err error) (string, int) {
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 	if err := h.auth.Logout(r.Context(), h.sessionToken(r)); err != nil {
-		http.Error(w, "ошибка выхода", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.logout"), http.StatusInternalServerError)
 		return
 	}
 	h.clearCookie(w, r)

@@ -63,14 +63,14 @@ func (h *Handler) absolute(r *http.Request, path string) string {
 
 func (h *Handler) robots(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	w.Header().Set("X-Robots-Tag", "noindex")
-	body := "User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /logout\nDisallow: /edit\nDisallow: /history\nDisallow: /users\nDisallow: /branches\nDisallow: /media\nDisallow: /account\n"
+	body := "User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /logout\nDisallow: /lang\nDisallow: /edit\nDisallow: /history\nDisallow: /users\nDisallow: /branches\nDisallow: /media\nDisallow: /account\n"
 	if origin := h.absolute(r, ""); origin != "" {
 		body += "\nSitemap: " + origin + "/sitemap.xml\n"
 	}
@@ -79,20 +79,20 @@ func (h *Handler) robots(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
 	origin := h.absolute(r, "")
 	if origin == "" {
-		http.Error(w, "некорректный запрос", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 		return
 	}
 
 	entries, err := h.wiki.Sitemap(r.Context())
 	if err != nil {
 		log.Printf("карта сайта: %v", err)
-		http.Error(w, "не удалось построить карту сайта", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.sitemap"), http.StatusInternalServerError)
 		return
 	}
 	entries = foldHome(entries, h.home)

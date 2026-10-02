@@ -10,7 +10,7 @@ import (
 )
 
 func TestMediaPrivateDenied(t *testing.T) {
-	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README")
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 
@@ -35,7 +35,7 @@ func TestSplitMediaPath(t *testing.T) {
 
 func TestMediaPublicOK(t *testing.T) {
 	wiki := &mediaWiki{data: []byte("png"), ctype: "image/png"}
-	h := New(wiki, &stubAuth{}, &stubView{}, false, "README")
+	h := New(wiki, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
 	mux := http.NewServeMux()
 	h.Register(mux)
 

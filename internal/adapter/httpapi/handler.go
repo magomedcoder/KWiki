@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/magomedcoder/kwiki/internal/adapter/i18n"
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
 	"github.com/magomedcoder/kwiki/resources"
@@ -71,23 +72,23 @@ type Auth interface {
 }
 
 type View interface {
-	Index(w http.ResponseWriter, view usecase.IndexView, actor usecase.Actor)
+	Index(w http.ResponseWriter, view usecase.IndexView, actor usecase.Actor, lang string)
 
-	Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor)
+	Page(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor, lang string)
 
-	Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor)
+	Edit(w http.ResponseWriter, form usecase.EditForm, branches []domain.Branch, actor usecase.Actor, lang string)
 
-	Preview(w http.ResponseWriter, content, branch string)
+	Preview(w http.ResponseWriter, content, branch, lang string)
 
-	Login(w http.ResponseWriter, page usecase.LoginPage)
+	Login(w http.ResponseWriter, page usecase.LoginPage, lang string)
 
-	Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor)
+	Users(w http.ResponseWriter, page usecase.UsersPage, actor usecase.Actor, lang string)
 
-	Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor)
+	Branches(w http.ResponseWriter, page usecase.BranchesPage, actor usecase.Actor, lang string)
 
-	History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor)
+	History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor, lang string)
 
-	NotFound(w http.ResponseWriter, actor usecase.Actor)
+	NotFound(w http.ResponseWriter, actor usecase.Actor, lang string)
 }
 
 type Handler struct {
@@ -97,11 +98,15 @@ type Handler struct {
 	secure     bool
 	home       string
 	cookieName string
+	bundle     *i18n.Bundle
 }
 
-func New(wiki Wiki, auth Auth, view View, secure bool, home string) *Handler {
+func New(wiki Wiki, auth Auth, view View, secure bool, home string, bundle *i18n.Bundle) *Handler {
 	if home == "" {
 		home = domain.DefaultHome
+	}
+	if bundle == nil {
+		panic("i18n bundle is required")
 	}
 
 	return &Handler{
@@ -111,11 +116,13 @@ func New(wiki Wiki, auth Auth, view View, secure bool, home string) *Handler {
 		secure:     secure,
 		home:       home,
 		cookieName: cookieName(secure),
+		bundle:     bundle,
 	}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/login", h.login)
+	mux.HandleFunc("/lang", h.setLang)
 	mux.HandleFunc("/favicon.ico", h.favicon)
 	mux.HandleFunc("/robots.txt", h.robots)
 	mux.HandleFunc("/sitemap.xml", h.sitemap)
@@ -134,7 +141,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 
 func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -164,7 +171,7 @@ func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("ветка: %v", err)
-		http.Error(w, "не удалось открыть ветку", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_branch"), http.StatusInternalServerError)
 		return
 	}
 
@@ -198,7 +205,7 @@ func (h *Handler) publicCatalog(w http.ResponseWriter, r *http.Request) {
 	branches, err := h.wiki.VisibleBranches(r.Context(), false)
 	if err != nil {
 		log.Printf("список веток: %v", err)
-		http.Error(w, "не удалось загрузить ветки", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.load_branches"), http.StatusInternalServerError)
 		return
 	}
 	if len(branches) == 0 {
@@ -211,21 +218,22 @@ func (h *Handler) publicCatalog(w http.ResponseWriter, r *http.Request) {
 		pages, err := h.pageLinks(r.Context(), branch.Name, "")
 		if err != nil {
 			log.Printf("список страниц: %v", err)
-			http.Error(w, "не удалось загрузить страницы", http.StatusInternalServerError)
+			http.Error(w, h.t(r, "errors.load_pages"), http.StatusInternalServerError)
 			return
 		}
 		links[i].Pages = pages
 	}
 
+	lang := langFrom(r)
 	markIndexable(w, true)
 	h.view.Index(w, usecase.IndexView{
-		Title:       "Публичные страницы",
-		Description: "Публичные страницы вики",
+		Title:       h.t(r, "page.public_catalog"),
+		Description: h.t(r, "page.public_catalog_desc"),
 		Catalog:     true,
 		Branches:    links,
 		Canonical:   h.absolute(r, "/"),
 		Indexable:   true,
-	}, usecase.Actor{})
+	}, usecase.Actor{}, lang)
 }
 
 func (h *Handler) pageLinks(ctx context.Context, branch, current string) ([]usecase.PageLink, error) {
@@ -245,7 +253,7 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 	}
 	if err != nil {
 		log.Printf("просмотр страницы: %v", err)
-		http.Error(w, "не удалось открыть страницу", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_page"), http.StatusInternalServerError)
 		return
 	}
 
@@ -258,7 +266,7 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 	branches, err := h.wiki.VisibleBranches(r.Context(), actor.Email != "")
 	if err != nil {
 		log.Printf("список веток: %v", err)
-		http.Error(w, "не удалось открыть страницу", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_page"), http.StatusInternalServerError)
 		return
 	}
 
@@ -278,7 +286,7 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 	pages, err := h.pageLinks(r.Context(), branch.Name, view.Slug)
 	if err != nil {
 		log.Printf("список страниц: %v", err)
-		http.Error(w, "не удалось открыть страницу", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_page"), http.StatusInternalServerError)
 		return
 	}
 
@@ -296,12 +304,12 @@ func (h *Handler) showPage(w http.ResponseWriter, r *http.Request, branch domain
 		screen.Canonical = h.absolute(r, path)
 	}
 
-	h.view.Page(w, screen, actor)
+	h.view.Page(w, screen, actor, langFrom(r))
 }
 
 func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -318,7 +326,7 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("ветка: %v", err)
-		http.Error(w, "не удалось открыть историю", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_history"), http.StatusInternalServerError)
 		return
 	}
 
@@ -335,7 +343,7 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("история страницы: %v", err)
-		http.Error(w, "не удалось открыть историю", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_history"), http.StatusInternalServerError)
 		return
 	}
 
@@ -350,12 +358,12 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		EditHref:    domain.EditPath(branch.Name, view.Slug),
 		ReadHref:    read,
 		HistoryHref: domain.HistoryPath(branch.Name, view.Slug),
-	}, actor)
+	}, actor, langFrom(r))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
 	markIndexable(w, false)
-	h.view.NotFound(w, actorFrom(r))
+	h.view.NotFound(w, actorFrom(r), langFrom(r))
 }
 
 func (h *Handler) denyPrivate(w http.ResponseWriter, r *http.Request) {
@@ -365,17 +373,17 @@ func (h *Handler) denyPrivate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) previewEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	h.view.Preview(w, r.FormValue("content"), requestedBranch(r))
+	h.view.Preview(w, r.FormValue("content"), requestedBranch(r), langFrom(r))
 }
 
 func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -385,14 +393,14 @@ func (h *Handler) asset(w http.ResponseWriter, r *http.Request) {
 	}[r.URL.Path]
 	if !ok {
 		markIndexable(w, false)
-		http.Error(w, "страница не найдена", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.not_found"), http.StatusNotFound)
 		return
 	}
 
 	data, err := resources.FS.ReadFile(name)
 	if err != nil {
 		markIndexable(w, false)
-		http.Error(w, "страница не найдена", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.not_found"), http.StatusNotFound)
 		return
 	}
 
@@ -406,14 +414,14 @@ func (h *Handler) edit(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.savePage(w, r)
 	default:
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 	}
 }
 
 func (h *Handler) editForm(w http.ResponseWriter, r *http.Request) {
 	form, err := h.wiki.EditForm(r.Context(), requestedBranch(r), r.URL.Query().Get("slug"))
 	if errors.Is(err, domain.ErrInvalidSlug) {
-		http.Error(w, "некорректный адрес страницы", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.invalid_slug"), http.StatusBadRequest)
 		return
 	}
 	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
@@ -422,23 +430,23 @@ func (h *Handler) editForm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("форма правки: %v", err)
-		http.Error(w, "не удалось открыть форму", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_form"), http.StatusInternalServerError)
 		return
 	}
 
 	branches, err := h.wiki.ListBranches(r.Context())
 	if err != nil {
 		log.Printf("список веток: %v", err)
-		http.Error(w, "не удалось открыть форму", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_form"), http.StatusInternalServerError)
 		return
 	}
 
-	h.view.Edit(w, form, branches, actorFrom(r))
+	h.view.Edit(w, form, branches, actorFrom(r), langFrom(r))
 }
 
 func (h *Handler) savePage(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "некорректный запрос", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 		return
 	}
 
@@ -446,16 +454,16 @@ func (h *Handler) savePage(w http.ResponseWriter, r *http.Request) {
 	slug, err := h.wiki.SavePage(r.Context(), branch, r.FormValue("slug"), r.FormValue("content"), h.sessionToken(r))
 	if err != nil && !errors.Is(err, usecase.ErrIndexSync) {
 		if errors.Is(err, domain.ErrInvalidSlug) {
-			http.Error(w, "некорректный адрес страницы", http.StatusBadRequest)
+			http.Error(w, h.t(r, "errors.invalid_slug"), http.StatusBadRequest)
 			return
 		}
 		if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
-			http.Error(w, "ветка не найдена", http.StatusNotFound)
+			http.Error(w, h.t(r, "errors.branch_not_found"), http.StatusNotFound)
 			return
 		}
 
 		log.Printf("сохранение страницы: %v", err)
-		http.Error(w, "не удалось сохранить страницу", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.save_page"), http.StatusInternalServerError)
 		return
 	}
 

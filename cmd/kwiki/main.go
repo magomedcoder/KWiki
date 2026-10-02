@@ -10,10 +10,12 @@ import (
 	"github.com/magomedcoder/kwiki/internal/adapter/git"
 	"github.com/magomedcoder/kwiki/internal/adapter/html"
 	"github.com/magomedcoder/kwiki/internal/adapter/httpapi"
+	"github.com/magomedcoder/kwiki/internal/adapter/i18n"
 	"github.com/magomedcoder/kwiki/internal/adapter/password"
 	"github.com/magomedcoder/kwiki/internal/adapter/sqlite"
 	"github.com/magomedcoder/kwiki/internal/domain"
 	"github.com/magomedcoder/kwiki/internal/usecase"
+	"github.com/magomedcoder/kwiki/resources"
 )
 
 func main() {
@@ -28,11 +30,17 @@ func main() {
 	secure := flag.Bool("secure", false, "")
 	pepper := flag.String("pepper", "", "")
 	homeFlag := flag.String("home", "README.md", "")
+	langFlag := flag.String("lang", i18n.DefaultLang, "")
 	flag.Parse()
 
 	home, err := domain.HomeSlug(*homeFlag)
 	if err != nil {
 		log.Fatalf("главная страница: %v", err)
+	}
+
+	defaultLang := i18n.Normalize(*langFlag)
+	if defaultLang == "" {
+		log.Fatalf("язык: некорректный код %q", *langFlag)
 	}
 
 	paths := pathsFrom(*data)
@@ -71,20 +79,29 @@ func main() {
 		log.Printf("нет пользователей: kwiki user add -data %s -email kwiki@example.com -name Имя -surname Фамилия", paths.Root)
 	}
 
-	views, err := html.Load()
+	bundle, err := i18n.LoadWithDefault(resources.FS, defaultLang)
+	if err != nil {
+		log.Fatalf("локали: %v", err)
+	}
+
+	if !bundle.Supported(defaultLang) {
+		log.Fatalf("язык: нет локали %q", defaultLang)
+	}
+
+	views, err := html.Load(bundle)
 	if err != nil {
 		log.Fatalf("шаблоны: %v", err)
 	}
 
-	handler := httpapi.New(wiki, auth, views, *secure, home)
+	handler := httpapi.New(wiki, auth, views, *secure, home, bundle)
 	mux := http.NewServeMux()
 	handler.Register(mux)
 
 	if !*secure {
 		log.Printf("куки сессии без постоянной защиты: для защищённого соединения укажите -secure")
 	}
-	log.Printf("KWiki запущен на %s (каталог %s)", *addr, paths.Root)
-	log.Fatal(http.ListenAndServe(*addr, handler.Protect(mux)))
+	log.Printf("KWiki запущен на %s (каталог %s, язык %s)", *addr, paths.Root, bundle.Default())
+	log.Fatal(http.ListenAndServe(*addr, handler.Protect(handler.WithLang(mux))))
 }
 
 func loadHasher(raw string) (*password.Hasher, error) {

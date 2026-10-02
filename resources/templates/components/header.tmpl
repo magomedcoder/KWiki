@@ -1,39 +1,53 @@
 {{define "header"}}
 <header class="sticky top-0 z-50 flex min-h-13 flex-wrap items-center gap-x-3 gap-y-2 border-b border-wiki-line bg-white py-1.5 ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] print:hidden">
     {{if .Headings}}
-    <label class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 text-sm text-wiki-ink md:hidden" for="nav-open">Меню</label>
+    <label class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 text-sm text-wiki-ink md:hidden" for="nav-open">{{ t .Lang "nav.menu" }}</label>
     {{end}}
     <a class="font-serif text-[1.7rem] leading-none tracking-wide text-wiki-ink no-underline hover:text-wiki-ink hover:no-underline max-md:text-2xl" href="{{.Home}}">KWiki</a>
-    {{if .Email}}
-    <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="Навигация">
-        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.Home}}">Страницы</a>
-        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.NewHref}}">Новая страница</a>
-        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/branches">Ветки</a>{{end}}
-        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/users">Пользователи</a>{{end}}
+    <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="{{ t .Lang "nav.language" }}">
+        {{if .Email}}
+        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.Home}}">{{ t .Lang "nav.pages" }}</a>
+        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.NewHref}}">{{ t .Lang "nav.new_page" }}</a>
+        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/branches">{{ t .Lang "nav.branches" }}</a>{{end}}
+        {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/users">{{ t .Lang "nav.users" }}</a>{{end}}
         <details class="account-menu relative">
             <summary class="account-menu-name"><span class="min-w-0 truncate">{{.Name}}</span></summary>
             <div class="account-menu-panel">
-                <button class="account-menu-item" type="button" data-open-dialog="password-dialog">Сменить пароль</button>
+                <button class="account-menu-item" type="button" data-open-dialog="password-dialog">{{ t .Lang "auth.change_password" }}</button>
                 <form method="POST" action="/logout" class="m-0">
                     <input type="hidden" name="csrf" value="{{.CSRF}}">
-                    <button class="account-menu-item" type="submit">Выйти</button>
+                    <button class="account-menu-item" type="submit">{{ t .Lang "auth.sign_out" }}</button>
                 </form>
             </div>
         </details>
+        {{end}}
+        <div class="flex items-center gap-1.5 text-sm" aria-label="{{ t .Lang "nav.language" }}">
+            {{range .Languages}}
+            {{if eq .Code $.Lang}}
+            <span class="font-semibold text-wiki-ink" aria-current="true">{{.Label}}</span>
+            {{else}}
+            <form method="POST" action="/lang" class="m-0">
+                <input type="hidden" name="lang" value="{{.Code}}">
+                <button class="cursor-pointer border-0 bg-transparent p-0 text-wiki-link underline-offset-2 hover:underline" type="submit">{{.Label}}</button>
+            </form>
+            {{end}}
+            {{end}}
+        </div>
     </nav>
+    {{if .Email}}
     <dialog class="wiki-dialog" id="password-dialog">
         <form method="dialog" class="mb-3 flex items-start justify-between gap-3">
-            <h2 class="m-0 font-serif text-xl font-normal">Сменить пароль</h2>
-            <button class="wiki-btn" value="cancel" type="submit">Закрыть</button>
+            <h2 class="m-0 font-serif text-xl font-normal">{{ t .Lang "auth.change_password" }}</h2>
+            <button class="wiki-btn" value="cancel" type="submit">{{ t .Lang "auth.close" }}</button>
         </form>
-        <p class="mt-0 mb-3 text-sm text-wiki-muted">После смены пароля нужно войти снова.</p>
+        <p class="mt-0 mb-3 text-sm text-wiki-muted">{{ t .Lang "auth.change_password_hint" }}</p>
         <p class="mb-3 hidden rounded-sm border border-wiki-danger-line bg-wiki-danger-bg px-3 py-2.5 text-sm text-wiki-danger" id="password-error"></p>
         <form id="password-form" action="/account/password" method="POST">
             <input type="hidden" name="csrf" value="{{.CSRF}}">
-            {{template "field" (dict "Label" "Текущий пароль" "Type" "password" "Name" "current_password" "Required" true "Autocomplete" "current-password")}}
-            {{template "field" (dict "Label" "Новый пароль" "Type" "password" "Name" "password" "Required" true "Autocomplete" "new-password")}}
-            {{template "field" (dict "Label" "Повтор пароля" "Type" "password" "Name" "password_confirm" "Required" true "Autocomplete" "new-password")}}
-            <button class="wiki-btn wiki-btn-solid" type="submit">Сохранить</button>
+            {{template "field" (dict "Label" (t .Lang "auth.current_password") "Type" "password" "Name" "current_password" "Required" true "Autocomplete" "current-password")}}
+            {{template "field" (dict "Label" (t .Lang "auth.new_password") "Type" "password" "Name" "password" "Required" true "Autocomplete" "new-password")}}
+            {{template "field" (dict "Label" (t .Lang "auth.confirm_password") "Type" "password" "Name" "password_confirm" "Required" true "Autocomplete" "new-password")}}
+            <button class="wiki-btn wiki-btn-solid" type="submit">{{ t .Lang "auth.save" }}</button>
         </form>
     </dialog>
     {{end}}

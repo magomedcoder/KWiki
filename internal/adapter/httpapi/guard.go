@@ -39,22 +39,22 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 		if err != nil {
-			http.Error(w, "ошибка входа", http.StatusInternalServerError)
+			http.Error(w, h.t(r, "errors.login"), http.StatusInternalServerError)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			ct := r.Header.Get("Content-Type")
 			if strings.HasPrefix(ct, "multipart/form-data") {
 				if err := r.ParseMultipartForm(mediaFormMemory); err != nil {
-					http.Error(w, "некорректный запрос", http.StatusBadRequest)
+					http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 					return
 				}
 			} else if err := r.ParseForm(); err != nil {
-				http.Error(w, "некорректный запрос", http.StatusBadRequest)
+				http.Error(w, h.t(r, "errors.bad_request"), http.StatusBadRequest)
 				return
 			}
 			if !usecase.TokenEqual(r.FormValue("csrf"), actor.CSRF) {
-				http.Error(w, "некорректный запрос", http.StatusForbidden)
+				http.Error(w, h.t(r, "errors.bad_request"), http.StatusForbidden)
 				return
 			}
 		}
@@ -67,7 +67,7 @@ func (h *Handler) optionalAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor, err := h.resume(r)
 		if err != nil && !errors.Is(err, domain.ErrUnauthenticated) {
-			http.Error(w, "ошибка входа", http.StatusInternalServerError)
+			http.Error(w, h.t(r, "errors.login"), http.StatusInternalServerError)
 			return
 		}
 

@@ -31,7 +31,7 @@ func splitMediaPath(path string) (branch, rel string, ok bool) {
 
 func (h *Handler) serveMedia(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -48,7 +48,7 @@ func (h *Handler) serveMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("медиа ветка: %v", err)
-		http.Error(w, "не удалось открыть файл", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_file"), http.StatusInternalServerError)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (h *Handler) serveMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("медиа: %v", err)
-		http.Error(w, "не удалось открыть файл", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.open_file"), http.StatusInternalServerError)
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *Handler) mediaAPI(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteMedia(w, r)
 	default:
-		http.Error(w, "метод не разрешен", http.StatusMethodNotAllowed)
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 	}
 }
 
@@ -106,13 +106,13 @@ func (h *Handler) listMedia(w http.ResponseWriter, r *http.Request) {
 	branch := requestedBranch(r)
 	items, err := h.wiki.ListMedia(r.Context(), h.sessionToken(r), branch)
 	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
-		http.Error(w, "ветка не найдена", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.branch_not_found"), http.StatusNotFound)
 		return
 	}
 
 	if err != nil {
 		log.Printf("список медиа: %v", err)
-		http.Error(w, "не удалось загрузить медиа", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.load_media"), http.StatusInternalServerError)
 		return
 	}
 
@@ -122,18 +122,18 @@ func (h *Handler) listMedia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "файл не передан", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.file_missing"), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(io.LimitReader(file, domain.MaxMediaBytes+1))
 	if err != nil {
-		http.Error(w, "не удалось прочитать файл", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.read_file"), http.StatusBadRequest)
 		return
 	}
 	if len(data) > domain.MaxMediaBytes {
-		http.Error(w, "файл больше 2 МБ", http.StatusRequestEntityTooLarge)
+		http.Error(w, h.t(r, "errors.file_too_large"), http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *Handler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.wiki.StageMedia(r.Context(), h.sessionToken(r), requestedBranch(r), folder, name, data, overwrite)
 	if errors.Is(err, domain.ErrMediaTooLarge) {
-		http.Error(w, "файл больше 2 МБ", http.StatusRequestEntityTooLarge)
+		http.Error(w, h.t(r, "errors.file_too_large"), http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -156,18 +156,18 @@ func (h *Handler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if errors.Is(err, domain.ErrInvalidMediaPath) {
-		http.Error(w, "некорректный путь", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.invalid_path"), http.StatusBadRequest)
 		return
 	}
 
 	if errors.Is(err, domain.ErrInvalidBranch) || errors.Is(err, domain.ErrNotFound) {
-		http.Error(w, "ветка не найдена", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.branch_not_found"), http.StatusNotFound)
 		return
 	}
 
 	if err != nil {
 		log.Printf("загрузка медиа: %v", err)
-		http.Error(w, "не удалось загрузить файл", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.upload_file"), http.StatusInternalServerError)
 		return
 	}
 
@@ -182,23 +182,23 @@ func (h *Handler) deleteMedia(w http.ResponseWriter, r *http.Request) {
 
 	err := h.wiki.DeleteMedia(r.Context(), h.sessionToken(r), requestedBranch(r), path)
 	if errors.Is(err, domain.ErrNotFound) {
-		http.Error(w, "файл не найден", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.file_not_found"), http.StatusNotFound)
 		return
 	}
 
 	if errors.Is(err, domain.ErrInvalidMediaPath) {
-		http.Error(w, "некорректный путь", http.StatusBadRequest)
+		http.Error(w, h.t(r, "errors.invalid_path"), http.StatusBadRequest)
 		return
 	}
 
 	if errors.Is(err, domain.ErrInvalidBranch) {
-		http.Error(w, "ветка не найдена", http.StatusNotFound)
+		http.Error(w, h.t(r, "errors.branch_not_found"), http.StatusNotFound)
 		return
 	}
 
 	if err != nil {
 		log.Printf("удаление медиа: %v", err)
-		http.Error(w, "не удалось удалить файл", http.StatusInternalServerError)
+		http.Error(w, h.t(r, "errors.delete_file"), http.StatusInternalServerError)
 		return
 	}
 

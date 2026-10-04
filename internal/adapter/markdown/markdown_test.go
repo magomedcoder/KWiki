@@ -48,3 +48,41 @@ func TestDocumentImages(t *testing.T) {
 		t.Fatal("pdf не должен быть img")
 	}
 }
+
+func TestDocumentMediaSize(t *testing.T) {
+	body, _ := Document([]byte("![схема](shots/a.png =400x300) и ![клип](clip.mp4 =640x) и ![ролик](demo.webm =x240)"), "docs")
+	if !strings.Contains(body, `<img src="/b/docs/media/shots/a.png" alt="схема" width="400" height="300" style="max-width:100%;width:400px;height:300px">`) {
+		t.Fatalf("img size: %s", body)
+	}
+
+	if !strings.Contains(body, `<video src="/b/docs/media/clip.mp4" controls playsinline width="640" style="max-width:100%;width:640px;height:auto"></video>`) {
+		t.Fatalf("video width: %s", body)
+	}
+
+	if !strings.Contains(body, `<video src="/b/docs/media/demo.webm" controls playsinline height="240" style="max-width:100%;height:240px"></video>`) {
+		t.Fatalf("video height: %s", body)
+	}
+}
+
+func TestDocumentExtraSyntax(t *testing.T) {
+	body, _ := Document([]byte("1. один\n2. два\n\n> цитата\n\n---\n\n~~нет~~ и __жирный__ и _курсив_\n\n| A | B |\n| --- | --- |\n| 1 | **x** |\n"), "")
+	if !strings.Contains(body, "<ol>") || !strings.Contains(body, "<li>один</li>") {
+		t.Fatalf("ol: %s", body)
+	}
+
+	if !strings.Contains(body, "<blockquote><p>цитата</p></blockquote>") {
+		t.Fatalf("quote: %s", body)
+	}
+
+	if !strings.Contains(body, "<hr>") {
+		t.Fatalf("hr: %s", body)
+	}
+
+	if !strings.Contains(body, "<del>нет</del>") || !strings.Contains(body, "<strong>жирный</strong>") || !strings.Contains(body, "<em>курсив</em>") {
+		t.Fatalf("inline: %s", body)
+	}
+
+	if !strings.Contains(body, "<table>") || !strings.Contains(body, "<th>A</th>") || !strings.Contains(body, "<strong>x</strong>") {
+		t.Fatalf("table: %s", body)
+	}
+}

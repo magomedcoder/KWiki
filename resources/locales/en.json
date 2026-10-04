@@ -10,6 +10,7 @@
   "nav.language": "Language",
   "nav.toc": "Contents",
   "nav.page_actions": "Page actions",
+  "nav.help": "Markdown",
 
   "auth.login": "Sign in",
   "auth.email": "Email",
@@ -50,6 +51,87 @@
   "page.public_catalog": "Public pages",
   "page.public_catalog_desc": "Public wiki pages",
 
+  "help.title": "How to write Markdown",
+  "help.intro": "Markdown is a simple way to format text with a few characters. Below is everything KWiki understands. On the left is what you type, on the right is how it looks on the page.",
+  "help.write": "You write",
+  "help.see": "You see",
+  "help.limits": "KWiki does not process nested lists, raw HTML, or line breaks made with two spaces. You can combine marks on one line.",
+
+  "help.headings.title": "Headings",
+  "help.headings.lead": "More hash marks make a smaller heading. Use one to six. Put them at the start of the line, then a space.",
+  "help.headings.h1": "Large heading",
+  "help.headings.h2": "Medium heading",
+  "help.headings.h3": "Third-level heading",
+  "help.headings.h4": "Fourth level",
+  "help.headings.h5": "Fifth level",
+  "help.headings.h6": "Sixth level",
+
+  "help.paragraphs.title": "Paragraphs",
+  "help.paragraphs.lead": "Plain text becomes a paragraph. A blank line starts a new one.",
+  "help.paragraphs.a": "First paragraph.",
+  "help.paragraphs.b": "Second paragraph - after a blank line.",
+
+  "help.emphasis.title": "Bold and italic",
+  "help.emphasis.lead": "Two asterisks or two underscores make text bold; one asterisk or one underscore makes it italic.",
+  "help.emphasis.sample": "This is **important**, this is __also bold__, this is *emphasis* and this is _also italic_.",
+
+  "help.strike.title": "Strikethrough",
+  "help.strike.lead": "Two tildes on each side strike the text out.",
+  "help.strike.sample": "This is ~~outdated~~, this is not.",
+
+  "help.inline_code.title": "Inline code",
+  "help.inline_code.lead": "Backticks mark a short file name, command, or snippet.",
+  "help.inline_code.sample": "The file is called `README.md`.",
+
+  "help.code_block.title": "Code block",
+  "help.code_block.lead": "Three backticks on their own line open and close a block. Text inside is not formatted.",
+
+  "help.lists.title": "Bullet list",
+  "help.lists.lead": "A line that starts with a dash or asterisk and a space becomes a list item.",
+  "help.lists.a": "first item",
+  "help.lists.b": "second item",
+  "help.lists.c": "also an item",
+
+  "help.ordered.title": "Numbered list",
+  "help.ordered.lead": "A number, a period, and a space at the start of the line. The page shows items in order.",
+  "help.ordered.a": "do this first",
+  "help.ordered.b": "then this",
+  "help.ordered.c": "and this",
+
+  "help.quote.title": "Quote",
+  "help.quote.lead": "A greater-than sign at the start of the line. Consecutive quote lines become one block.",
+  "help.quote.a": "A short remark.",
+  "help.quote.b": "And another quoted line.",
+
+  "help.rule.title": "Horizontal rule",
+  "help.rule.lead": "Three or more hyphens, asterisks, or underscores on their own line draw a line. The same: `***` or `___`.",
+  "help.rule.before": "Text above the line.",
+  "help.rule.after": "Text below the line.",
+
+  "help.links.title": "Link",
+  "help.links.lead": "Label in square brackets, address in parentheses. The address can be a wiki page or a website.",
+  "help.links.label": "Markdown help",
+  "help.links.sample": "[Markdown help](/help)",
+
+  "help.images.title": "Image",
+  "help.images.lead": "Like a link, but with an exclamation mark at the start. Upload the file first with “Upload media”.",
+  "help.images.note": "After you save, the page shows the image. Size is optional: width and height in pixels after an equals sign. You can set only width (`=400x`) or only height (`=x240`).",
+
+  "help.video.title": "Video",
+  "help.video.lead": "Same syntax as an image. Use `.mp4` or `.webm` files.",
+  "help.video.note": "The page shows a player. Size works the same way: `=640x360`.",
+
+  "help.table.title": "Table",
+  "help.table.lead": "Cells separated by a pipe. The second line is hyphens. Outer `|` marks are optional.",
+  "help.table.col_a": "Column A",
+  "help.table.col_b": "Column B",
+  "help.table.cell_a": "apple",
+  "help.table.cell_b": "**bold** in a cell",
+
+  "help.combine.title": "On one line",
+  "help.combine.lead": "Bold, italic, code, links, and strikethrough can be mixed.",
+  "help.combine.sample": "See the **[help](/help)** and the `README.md` file; this is ~~not a secret~~.",
+
   "edit.address": "Address",
   "edit.branch": "Branch",
   "edit.branch_private": " (private)",
@@ -81,6 +163,8 @@
   "media.new_folder": "New folder",
   "media.file_name": "File name",
   "media.alt": "Caption (alt)",
+  "media.width": "Width",
+  "media.height": "Height",
   "media.upload_insert": "Upload and insert",
   "media.pick_title": "From uploads",
   "media.empty": "No files yet.",

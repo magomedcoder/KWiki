@@ -21,6 +21,20 @@
 
 {{define "footer"}}
 <footer class="mt-auto border-t border-wiki-line-soft px-4 py-3 ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] md:px-8 print:hidden">
-    <a class="text-sm text-wiki-faint no-underline hover:text-wiki-ink hover:underline" href="https://github.com/magomedcoder/KWiki">KWiki</a>
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <a class="text-sm text-wiki-faint no-underline hover:text-wiki-ink hover:underline" href="https://github.com/magomedcoder/KWiki">KWiki</a>
+        <div class="flex items-center gap-1.5 text-sm" aria-label="{{ t .Lang "nav.language" }}">
+            {{range .Languages}}
+            {{if eq .Code $.Lang}}
+            <span class="font-semibold text-wiki-ink" aria-current="true">{{.Label}}</span>
+            {{else}}
+            <form method="POST" action="/lang" class="m-0">
+                <input type="hidden" name="lang" value="{{.Code}}">
+                <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-wiki-link underline-offset-2 hover:underline" type="submit">{{.Label}}</button>
+            </form>
+            {{end}}
+            {{end}}
+        </div>
+    </div>
 </footer>
 {{end}}

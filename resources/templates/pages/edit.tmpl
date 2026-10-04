@@ -30,6 +30,7 @@
         {{template "button" (dict "Type" "button" "Label" (t .Lang "edit.link") "Before" "[" "After" (t .Lang "edit.link_after") "Placeholder" (t .Lang "edit.ph_link"))}}
         {{template "button" (dict "Type" "button" "Label" (t .Lang "edit.upload_media") "Media" "upload")}}
         {{template "button" (dict "Type" "button" "Label" (t .Lang "edit.from_uploaded") "Media" "pick")}}
+        {{template "text-link" (dict "Href" "/help" "Label" (t .Lang "nav.help"))}}
       </div>
       <div class="editor-modes ms-auto flex flex-wrap gap-1.5">
         {{template "button" (dict "Type" "button" "Label" (t .Lang "edit.mode_edit") "Mode" "edit" "Active" true)}}
@@ -84,6 +85,14 @@
   <label class="mb-3 flex flex-col gap-1 text-sm text-wiki-muted">{{ t .Lang "media.alt" }}
     <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="text" id="media-alt">
   </label>
+  <div class="mb-3 grid grid-cols-2 gap-2">
+    <label class="flex flex-col gap-1 text-sm text-wiki-muted">{{ t .Lang "media.width" }}
+      <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="number" id="media-width" min="1" max="4096" placeholder="px">
+    </label>
+    <label class="flex flex-col gap-1 text-sm text-wiki-muted">{{ t .Lang "media.height" }}
+      <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="number" id="media-height" min="1" max="4096" placeholder="px">
+    </label>
+  </div>
   <p class="mb-2 hidden text-sm text-wiki-danger" id="media-upload-error"></p>
   <button class="wiki-btn" type="button" id="media-upload">{{ t .Lang "media.upload_insert" }}</button>
 </dialog>
@@ -93,6 +102,14 @@
     <h2 class="m-0 font-serif text-xl font-normal">{{ t .Lang "media.pick_title" }}</h2>
     <button class="inline-flex min-h-8 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-2 py-1 text-sm" value="cancel" type="submit">{{ t .Lang "common.close" }}</button>
   </form>
+  <div class="mb-3 grid grid-cols-2 gap-2">
+    <label class="flex flex-col gap-1 text-sm text-wiki-muted">{{ t .Lang "media.width" }}
+      <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="number" id="media-pick-width" min="1" max="4096" placeholder="px">
+    </label>
+    <label class="flex flex-col gap-1 text-sm text-wiki-muted">{{ t .Lang "media.height" }}
+      <input class="w-full rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink" type="number" id="media-pick-height" min="1" max="4096" placeholder="px">
+    </label>
+  </div>
   <p class="mb-2 hidden text-sm text-wiki-danger" id="media-list-error"></p>
   <p class="mt-0 mb-2 text-sm text-wiki-muted" id="media-list-empty">{{ t .Lang "media.empty" }}</p>
   <ul class="m-0 list-none space-y-2 p-0" id="media-list"></ul>

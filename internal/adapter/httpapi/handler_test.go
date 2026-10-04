@@ -299,6 +299,10 @@ func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage, _ string
 	s.login = page
 }
 
+func (stubView) Help(w http.ResponseWriter, _ usecase.Actor, _ string) {
+	w.WriteHeader(http.StatusOK)
+}
+
 func testBundle(t *testing.T) *i18n.Bundle {
 	t.Helper()
 	bundle, err := i18n.Load(resources.FS)
@@ -586,6 +590,18 @@ func TestSetLangCookie(t *testing.T) {
 
 	if langCookie == nil || langCookie.Value != "en" || langCookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("кука %+v", langCookie)
+	}
+}
+
+func TestHelpPage(t *testing.T) {
+	h := New(&stubWiki{}, &stubAuth{}, &stubView{}, false, "README", testBundle(t))
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rec := httptest.NewRecorder()
+	h.Protect(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/help", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("код %d", rec.Code)
 	}
 }
 

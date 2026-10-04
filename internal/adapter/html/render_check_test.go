@@ -182,4 +182,31 @@ func TestComponentsKeepMarkup(t *testing.T) {
 	if !strings.Contains(en.Body.String(), "Sign in") || !strings.Contains(en.Body.String(), `lang="en"`) {
 		t.Fatal("английская локаль не применилась")
 	}
+
+	help := httptest.NewRecorder()
+	view.Help(help, usecase.Actor{}, "ru")
+	helpBody := help.Body.String()
+	needles := []string{
+		"Как писать в Markdown",
+		"# Большой заголовок",
+		"###### Шестой уровень",
+		"**важно**",
+		"~~устарело~~",
+		"1. сначала это",
+		"&gt; Коротко о главном.",
+		"| Колонка A |",
+		"![alt](photo.png =400x300)",
+		"clip.mp4",
+		`href="/help"`,
+	}
+
+	for _, n := range needles {
+		if !strings.Contains(helpBody, n) {
+			t.Fatalf("справка без %q", n)
+		}
+	}
+
+	if strings.Contains(helpBody, "no value") {
+		t.Fatal("страница справки собрана не так")
+	}
 }

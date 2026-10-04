@@ -79,6 +79,15 @@ func IsImageMedia(rel string) bool {
 	}
 }
 
+func IsVideoMedia(rel string) bool {
+	switch strings.ToLower(path.Ext(rel)) {
+	case ".mp4", ".webm":
+		return true
+	default:
+		return false
+	}
+}
+
 func MediaContentType(rel string) string {
 	switch strings.ToLower(path.Ext(rel)) {
 	case ".jpg", ".jpeg":

@@ -4,8 +4,8 @@
     <label class="inline-flex min-h-10 cursor-pointer items-center rounded-sm border border-wiki-line bg-wiki-well px-3 text-sm text-wiki-ink md:hidden" for="nav-open">{{ t .Lang "nav.menu" }}</label>
     {{end}}
     <a class="font-serif text-[1.7rem] leading-none tracking-wide text-wiki-ink no-underline hover:text-wiki-ink hover:no-underline max-md:text-2xl" href="{{.Home}}">KWiki</a>
-    <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="{{ t .Lang "nav.language" }}">
-        {{if .Email}}
+    {{if .Email}}
+    <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="{{ t .Lang "nav.pages" }}">
         <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.Home}}">{{ t .Lang "nav.pages" }}</a>
         <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.NewHref}}">{{ t .Lang "nav.new_page" }}</a>
         {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/branches">{{ t .Lang "nav.branches" }}</a>{{end}}
@@ -20,20 +20,8 @@
                 </form>
             </div>
         </details>
-        {{end}}
-        <div class="flex items-center gap-1.5 text-sm" aria-label="{{ t .Lang "nav.language" }}">
-            {{range .Languages}}
-            {{if eq .Code $.Lang}}
-            <span class="font-semibold text-wiki-ink" aria-current="true">{{.Label}}</span>
-            {{else}}
-            <form method="POST" action="/lang" class="m-0">
-                <input type="hidden" name="lang" value="{{.Code}}">
-                <button class="cursor-pointer border-0 bg-transparent p-0 text-wiki-link underline-offset-2 hover:underline" type="submit">{{.Label}}</button>
-            </form>
-            {{end}}
-            {{end}}
-        </div>
     </nav>
+    {{end}}
     {{if .Email}}
     <dialog class="wiki-dialog" id="password-dialog">
         <form method="dialog" class="mb-3 flex items-start justify-between gap-3">

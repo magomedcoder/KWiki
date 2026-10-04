@@ -218,8 +218,27 @@
     refresh();
   }
 
-  function insertMediaMarkdown(ref, alt) {
-    insertAtCursor("![" + (alt || "") + "](" + ref + ")");
+  function insertMediaMarkdown(ref, alt, width, height) {
+    let dest = ref || "";
+    if (width || height) {
+      dest += " =" + (width || "") + "x" + (height || "");
+    }
+
+    insertAtCursor("![" + (alt || "") + "](" + dest + ")");
+  }
+
+  function mediaDim(id) {
+    const el = document.getElementById(id);
+    if (!el) {
+      return "";
+    }
+
+    const n = parseInt(el.value, 10);
+    if (!n || n < 1) {
+      return "";
+    }
+
+    return String(Math.min(n, 4096));
   }
 
   area.addEventListener("input", function () {
@@ -271,6 +290,8 @@
   const folderInput = document.getElementById("media-folder");
   const nameInput = document.getElementById("media-name");
   const altInput = document.getElementById("media-alt");
+  const widthInput = document.getElementById("media-width");
+  const heightInput = document.getElementById("media-height");
   const uploadBtn = document.getElementById("media-upload");
   const uploadError = document.getElementById("media-upload-error");
   const listError = document.getElementById("media-list-error");
@@ -462,7 +483,7 @@
       insert.textContent = t("js.media.insert");
       insert.addEventListener("click", function () {
         const alt = window.prompt(t("js.media.alt_prompt"), item.Name || "") || item.Name || "";
-        insertMediaMarkdown(item.Ref || item.Name, alt);
+        insertMediaMarkdown(item.Ref || item.Name, alt, mediaDim("media-pick-width"), mediaDim("media-pick-height"));
         pickDialog.close();
       });
       const remove = document.createElement("button");
@@ -566,9 +587,17 @@
         return;
       }
       const alt = (altInput.value || item.Name || name).trim();
-      insertMediaMarkdown(item.Ref || item.Name, alt);
+      insertMediaMarkdown(item.Ref || item.Name, alt, mediaDim("media-width"), mediaDim("media-height"));
       fileInput.value = "";
       fileChosen.textContent = t("js.media.no_file");
+      if (widthInput) {
+        widthInput.value = "";
+      }
+
+      if (heightInput) {
+        heightInput.value = "";
+      }
+      
       uploadDialog.close();
     });
   }

@@ -1,0 +1,25 @@
+{{define "content"}}
+<h1 id="page-title" class="mt-0 mb-3.5 border-b border-wiki-line pb-1 font-serif text-[1.85rem] leading-tight font-normal max-md:text-[1.55rem]">{{.Title}}</h1>
+<p class="mt-0 mb-6 text-wiki-muted">{{.Lead}}</p>
+{{range .Items}}
+<section class="mb-8 border-b border-wiki-line-soft pb-8 last:border-b-0 last:pb-0">
+  <h2 id="{{.ID}}" class="mt-0 mb-2 border-b border-wiki-line pb-0.5 font-serif text-[1.35rem] leading-snug font-normal">{{.Title}}</h2>
+  <p class="mt-0 mb-4">{{.Lead}}</p>
+  <div class="grid items-start gap-4 md:grid-cols-2">
+    <div>
+      <p class="mb-1.5 text-xs tracking-wider text-wiki-faint uppercase">{{ t $.Lang "help.write" }}</p>
+      <pre class="m-0 overflow-auto rounded-sm border border-[#eaecf0] bg-wiki-well p-3 font-mono text-sm leading-snug text-wiki-ink"><code>{{.Source}}</code></pre>
+    </div>
+    <div>
+      <p class="mb-1.5 text-xs tracking-wider text-wiki-faint uppercase">{{ t $.Lang "help.see" }}</p>
+      {{if .Result}}
+      {{template "prose" (dict "Class" "rounded-sm border border-wiki-line-soft bg-white p-3" "Body" .Result)}}
+      {{else}}
+      <p class="m-0 rounded-sm border border-wiki-line-soft bg-wiki-well p-3 text-sm text-wiki-muted">{{.Note}}</p>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+<p class="mb-0 text-sm text-wiki-muted">{{.Limits}}</p>
+{{end}}

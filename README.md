@@ -1,37 +1,39 @@
-# KWiki - лёгкая система для ведения вики на базе Git
+# KWiki - a lightweight Git-backed wiki
 
-Последняя сборка для Linux: [скачать kwiki](https://github.com/magomedcoder/KWiki/releases/latest/download/kwiki).
+[Русская версия](README-ru.md)
+
+Latest Linux build: [download kwiki](https://github.com/magomedcoder/KWiki/releases/latest/download/kwiki).
 
 ```bash
 chmod +x kwiki
 ```
 
-## Сервер
+## Server
 
 ```bash
-./kwiki -data ./data -addr :8000 -pepper 'длинный-секрет' -secure
+./kwiki -data ./data -addr :8000 -pepper 'long-secret' -secure
 ```
 
-| Флаг      | По умолчанию | Назначение                                                      |
-|-----------|--------------|-----------------------------------------------------------------|
-| `-data`   | `./data`     | основное хранилище                                              |
-| `-addr`   | `:8000`      | адрес HTTP                                                      |
-| `-pepper` | пусто        | секрет хеша паролей, тот же, что при `user add` и `user passwd` |
-| `-secure` | выключен     | защищённая кука и строгий заголовок транспорта, нужен HTTPS     |
-| `-home`   | `README.md`  | страница корня ветки                                            |
-| `-lang`   | `ru`         | язык интерфейса по умолчанию (`ru`, `en`)                       |
+| Flag      | Default      | Purpose                                                                  |
+|-----------|--------------|--------------------------------------------------------------------------|
+| `-data`   | `./data`     | main storage                                                             |
+| `-addr`   | `:8000`      | HTTP address                                                             |
+| `-pepper` | empty        | password hash secret, same as for `user add` and `user passwd`           |
+| `-secure` | off          | secure cookie and strict transport header; requires HTTPS                |
+| `-home`   | `README.md`  | branch root page                                                         |
+| `-lang`   | `ru`         | default UI language (`ru`, `en`)                                         |
 
 
-## Пользователи
+## Users
 
-Пароль задаётся флагом `-password`. Если флаг пустой, читает его скрыто из терминала.
+Set the password with `-password`. If the flag is empty, it is read hidden from the terminal.
 
-Первый пользователь становится администратором. Флаг `-admin` делает администратором и следующих.
+The first user becomes an administrator. `-admin` also makes later users administrators.
 
 ```bash
-./kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'длинный-секрет' -admin
+./kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'long-secret' -admin
 
-./kwiki user passwd -data ./data -email kwiki@example.com -password 'N3w-Wiki-Password' -pepper 'длинный-секрет'
+./kwiki user passwd -data ./data -email kwiki@example.com -password 'N3w-Wiki-Password' -pepper 'long-secret'
 
 ./kwiki user block -data ./data -email editor@example.com
 
@@ -40,7 +42,7 @@ chmod +x kwiki
 ./kwiki user delete -data ./data -email editor@example.com
 ```
 
-| Команда        | Флаги                                                              |
+| Command        | Flags                                                              |
 |----------------|--------------------------------------------------------------------|
 | `user add`     | `-data` `-email` `-name` `-surname` `-password` `-pepper` `-admin` |
 | `user passwd`  | `-data` `-email` `-password` `-pepper`                             |
@@ -48,7 +50,7 @@ chmod +x kwiki
 | `user unblock` | `-data` `-email`                                                   |
 | `user delete`  | `-data` `-email`                                                   |
 
-`-pepper` у `user add`, `user passwd` и у сервера должен совпадать. Иначе уже сохранённые пароли не подойдут.
+`-pepper` for `user add`, `user passwd`, and the server must match. Otherwise existing passwords will not work.
 
 ---
 
@@ -56,20 +58,20 @@ chmod +x kwiki
 
 ```bash
 docker build -t kwiki .
-docker run -p 8000:8000 -v kwiki-data:/var/lib/data kwiki -pepper 'длинный-секрет'
+docker run -p 8000:8000 -v kwiki-data:/var/lib/data kwiki -pepper 'long-secret'
 ```
 
-Данные в томе `kwiki-data`. Первый пользователь:
+Data lives in the `kwiki-data` volume. First user:
 
 ```bash
-docker run --rm -v kwiki-data:/var/lib/data kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'длинный-секрет' -admin
+docker run --rm -v kwiki-data:/var/lib/data kwiki user add -data ./data -email kwiki@example.com -name KWiki -surname KWiki -password 'S3cure-Wiki-Pass' -pepper 'long-secret' -admin
 ```
 
 ---
 
-## Сборка из исходников
+## Build from source
 
-Нужны Go 1.27, Node.js 22 и Yarn 1.22.
+Requires Go 1.27, Node.js 22, and Yarn 1.22.
 
 ```bash
 yarn
@@ -77,4 +79,4 @@ yarn build:css
 go build -o build/kwiki ./cmd/kwiki
 ```
 
-`yarn build:css` нужен до `go build`
+`yarn build:css` must run before `go build`

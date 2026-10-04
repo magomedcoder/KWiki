@@ -31,6 +31,7 @@ type Renderer struct {
 	branches *template.Template
 	notFound *template.Template
 	history  *template.Template
+	help     *template.Template
 }
 
 type shell struct {
@@ -185,6 +186,11 @@ func loadFS(fsys fs.FS, bundle *i18n.Bundle) (*Renderer, error) {
 	if r.history, err = r.parsePage(fsys, "history.tmpl"); err != nil {
 		return nil, err
 	}
+
+	if r.help, err = r.parsePage(fsys, "help.tmpl"); err != nil {
+		return nil, err
+	}
+
 	return r, nil
 }
 

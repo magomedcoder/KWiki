@@ -36,6 +36,13 @@
     scroll-margin-top: 4.5rem;
   }
 
+  .content video {
+    margin: 1rem 0;
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.125rem;
+  }
+
   dialog {
     position: fixed;
     inset: 0;

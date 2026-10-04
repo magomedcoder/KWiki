@@ -89,6 +89,8 @@ type View interface {
 	History(w http.ResponseWriter, view usecase.PageScreen, actor usecase.Actor, lang string)
 
 	NotFound(w http.ResponseWriter, actor usecase.Actor, lang string)
+
+	Help(w http.ResponseWriter, actor usecase.Actor, lang string)
 }
 
 type Handler struct {
@@ -136,6 +138,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/js/", h.asset)
 	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
 	mux.Handle("/history", h.optionalAuth(http.HandlerFunc(h.history)))
+	mux.Handle("/help", h.optionalAuth(http.HandlerFunc(h.help)))
 	mux.Handle("/", h.optionalAuth(http.HandlerFunc(h.wikiPage)))
 }
 
@@ -364,6 +367,16 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
 	markIndexable(w, false)
 	h.view.NotFound(w, actorFrom(r), langFrom(r))
+}
+
+func (h *Handler) help(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
+		return
+	}
+
+	markIndexable(w, true)
+	h.view.Help(w, actorFrom(r), langFrom(r))
 }
 
 func (h *Handler) denyPrivate(w http.ResponseWriter, r *http.Request) {

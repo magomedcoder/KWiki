@@ -5,8 +5,19 @@
     (dict "Label" (t .Lang "nav.files") "Href" .FilesRoot "Current" true)
   ))}}
 
-  <h1 id="page-title" class="mt-0 mb-2 border-b border-wiki-line pb-1 font-serif text-[1.85rem] leading-tight font-normal max-md:text-[1.55rem]">{{.Title}}</h1>
-  <p class="mt-0 mb-4 text-sm text-wiki-muted">{{ t .Lang "files.intro" }}</p>
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <h1 id="page-title" class="m-0 border-b border-wiki-line pb-1 font-serif text-[1.85rem] leading-tight font-normal max-md:text-[1.55rem]">{{.Title}}</h1>
+    {{if .Branches}}
+    <label class="block text-sm text-wiki-muted print:hidden">
+      <span class="mb-1 block text-xs tracking-wider text-wiki-faint uppercase">{{ t .Lang "files.branch" }}</span>
+      <select class="min-w-[10rem] rounded-sm border border-wiki-line bg-white px-2.5 py-2 text-base text-wiki-ink focus:border-wiki-muted focus:outline-2 focus:outline-[#d9dde3]" id="files-branch" onchange="if (this.value) location.href = this.value">
+        {{range .Branches}}
+        <option value="{{.Href}}" {{if .Current}}selected{{end}}>{{.Name}}{{if not .Public}}{{ t $.Lang "edit.branch_private" }}{{end}}</option>
+        {{end}}
+      </select>
+    </label>
+    {{end}}
+  </div>
 
   <nav class="mb-4 flex flex-wrap items-center gap-1 text-sm" aria-label="{{ t .Lang "files.breadcrumbs" }}">
     {{range $i, $c := .Crumbs}}
@@ -101,7 +112,7 @@
         {{template "td-end"}}
         {{template "td-start" (t $.Lang "files.col_actions")}}
           {{if $.CanEdit}}
-          <form method="POST" action="{{$.CurrentHref}}" class="m-0 inline" onsubmit="return confirm('{{ t $.Lang "files.confirm_delete" }}');">
+          <form method="POST" action="{{$.CurrentHref}}" class="m-0 inline" data-confirm-delete="{{.Path}}">
             <input type="hidden" name="csrf" value="{{$.CSRF}}">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="path" value="{{.Path}}">
@@ -121,7 +132,7 @@
       {{if .PageHref}}<a class="wiki-btn" href="{{.PageHref}}">{{ t .Lang "files.open_page" }}</a>{{end}}
       {{if .EditHref}}<a class="wiki-btn" href="{{.EditHref}}">{{ t .Lang "page.edit" }}</a>{{end}}
       {{if .CanEdit}}
-      <form method="POST" action="{{.FilesRoot}}" class="m-0" onsubmit="return confirm('{{ t .Lang "files.confirm_delete" }}');">
+      <form method="POST" action="{{.FilesRoot}}" class="m-0" data-confirm-delete="{{.Path}}">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="path" value="{{.Path}}">
@@ -145,15 +156,11 @@
   {{if .CloneURL}}
   <section class="mt-8 border-t border-wiki-line-soft pt-5">
     <h2 class="mt-0 mb-2 font-serif text-xl font-normal">{{ t .Lang "files.git_title" }}</h2>
-    <p class="mt-0 mb-3 text-sm text-wiki-muted">{{ t .Lang "files.git_note" }}</p>
     <p class="mb-1 text-xs tracking-wider text-wiki-faint uppercase">{{ t .Lang "files.clone" }}</p>
     <pre class="m-0 mb-3 overflow-auto rounded-sm border border-wiki-line-soft bg-wiki-well p-3 font-mono text-sm"><code>git clone {{.CloneURL}}</code></pre>
     <p class="mb-1 text-xs tracking-wider text-wiki-faint uppercase">{{ t .Lang "files.push" }}</p>
     <pre class="m-0 overflow-auto rounded-sm border border-wiki-line-soft bg-wiki-well p-3 font-mono text-sm">
-        <code>
-            git remote add kwiki {{.CloneURL}}
-            git push kwiki HEAD
-        </code>
+      <code>git remote add kwiki {{.CloneURL}} </br>git push kwiki HEAD</code>
     </pre>
     <p class="mt-3 mb-0 text-sm text-wiki-muted">{{ t .Lang "files.git_auth" }}</p>
   </section>

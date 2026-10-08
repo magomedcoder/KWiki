@@ -230,7 +230,7 @@ func ParseAcceptLanguage(header string, supported []string) string {
 	}
 
 	var offers []offer
-	for _, part := range strings.Split(header, ",") {
+	for part := range strings.SplitSeq(header, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -248,7 +248,7 @@ func ParseAcceptLanguage(header string, supported []string) string {
 		}
 
 		q := 1.0
-		for _, param := range strings.Split(rest, ";") {
+		for param := range strings.SplitSeq(rest, ";") {
 			param = strings.TrimSpace(param)
 			if after, ok := strings.CutPrefix(param, "q="); ok {
 				if v, err := strconv.ParseFloat(strings.TrimSpace(after), 64); err == nil {

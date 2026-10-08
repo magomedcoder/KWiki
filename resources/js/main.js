@@ -28,6 +28,15 @@
     }
   }
 
+  document.querySelectorAll("form[data-confirm-delete]").forEach(function (form) {
+    form.addEventListener("submit", function (event) {
+      const path = form.getAttribute("data-confirm-delete") || "";
+      if (!window.confirm(tf("js.files.delete_confirm", path))) {
+        event.preventDefault();
+      }
+    });
+  });
+
   document.querySelectorAll("[data-open-dialog]").forEach(function (button) {
     button.addEventListener("click", function () {
       const menu = button.closest("details");

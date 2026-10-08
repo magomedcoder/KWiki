@@ -27,12 +27,20 @@ type FileItemView struct {
 	SizeText string
 }
 
+type FileBranch struct {
+	Name    string
+	Href    string
+	Current bool
+	Public  bool
+}
+
 type FilesBrowse struct {
 	Branch      string
 	Path        string
 	IsDir       bool
 	Entries     []FileItemView
 	Crumbs      []FileBreadcrumb
+	Branches    []FileBranch
 	Content     string
 	ContentType string
 	Raw         []byte

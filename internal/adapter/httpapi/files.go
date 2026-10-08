@@ -137,9 +137,33 @@ func (h *Handler) showFiles(w http.ResponseWriter, r *http.Request, branch, rel 
 	}
 	view.CloneURL = clone
 	view.PushHint = clone
+	view.Branches = h.fileBranches(r, branch)
 
 	markIndexable(w, false)
 	h.view.Files(w, view, actor, langFrom(r))
+}
+
+func (h *Handler) fileBranches(r *http.Request, current string) []usecase.FileBranch {
+	list, err := h.wiki.VisibleBranches(r.Context(), true)
+	if err != nil {
+		return []usecase.FileBranch{{
+			Name:    current,
+			Href:    domain.FilesBrowsePath(current, ""),
+			Current: true,
+		}}
+	}
+
+	out := make([]usecase.FileBranch, 0, len(list))
+	for _, b := range list {
+		out = append(out, usecase.FileBranch{
+			Name:    b.Name,
+			Href:    domain.FilesBrowsePath(b.Name, ""),
+			Current: b.Name == current,
+			Public:  b.Public,
+		})
+	}
+	
+	return out
 }
 
 func (h *Handler) serveFileRaw(w http.ResponseWriter, r *http.Request, branch, rel string) {

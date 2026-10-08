@@ -219,12 +219,10 @@ func (stubWiki) BrowseFiles(_ context.Context, branch, path string, canEdit bool
 		IsDir:   true,
 		CanEdit: canEdit,
 		Entries: []usecase.FileItemView{{
-			DirEntry: domain.DirEntry{
-				Name: "README.md",
-				Path: "README.md",
-				Kind: domain.EntryFile,
-				Size: 12,
-			},
+			Name:     "README.md",
+			Path:     "README.md",
+			Kind:     domain.EntryFile,
+			Size:     12,
 			Href:     domain.FilesBrowsePath(branch, "README.md"),
 			Icon:     "md",
 			SizeText: "12 B",

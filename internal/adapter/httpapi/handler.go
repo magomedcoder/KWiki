@@ -47,12 +47,28 @@ type Wiki interface {
 	DeleteBranch(ctx context.Context, name string) error
 
 	Sitemap(ctx context.Context) ([]usecase.SitemapEntry, error)
+
+	BrowseFiles(ctx context.Context, branch, path string, canEdit bool) (usecase.FilesBrowse, error)
+
+	CreateFile(ctx context.Context, branch, path string, content []byte, asDir bool, actor usecase.Actor) error
+
+	UploadFile(ctx context.Context, branch, folder, name string, data []byte, overwrite bool, actor usecase.Actor) (domain.DirEntry, error)
+
+	DeleteFilePath(ctx context.Context, branch, path string, actor usecase.Actor) error
+
+	MoveFilePath(ctx context.Context, branch, from, to string, actor usecase.Actor) error
+
+	ReadFileBytes(ctx context.Context, branch, path string) ([]byte, string, error)
+
+	Sync(ctx context.Context) error
 }
 
 type Auth interface {
 	BeginLogin(ctx context.Context, previousToken, client string) (usecase.IssuedSession, error)
 
 	Login(ctx context.Context, challengeToken, csrf, email, password, ip, client string) (usecase.IssuedSession, error)
+
+	Authenticate(ctx context.Context, email, password, ip string) (usecase.Actor, error)
 
 	Resume(ctx context.Context, token, client string) (usecase.Actor, error)
 
@@ -91,12 +107,21 @@ type View interface {
 	NotFound(w http.ResponseWriter, actor usecase.Actor, lang string)
 
 	Help(w http.ResponseWriter, actor usecase.Actor, lang string)
+
+	Files(w http.ResponseWriter, view usecase.FilesBrowse, actor usecase.Actor, lang string)
+}
+
+type WorktreeResetter interface {
+	ResetWorktree() error
 }
 
 type Handler struct {
 	wiki       Wiki
 	auth       Auth
 	view       View
+	git        GitBackend
+	resetter   WorktreeResetter
+	gitLimit   *gitLimiter
 	secure     bool
 	home       string
 	cookieName string
@@ -115,11 +140,17 @@ func New(wiki Wiki, auth Auth, view View, secure bool, home string, bundle *i18n
 		wiki:       wiki,
 		auth:       auth,
 		view:       view,
+		gitLimit:   newGitLimiter(),
 		secure:     secure,
 		home:       home,
 		cookieName: cookieName(secure),
 		bundle:     bundle,
 	}
+}
+
+func (h *Handler) SetGit(git GitBackend, reset WorktreeResetter) {
+	h.git = git
+	h.resetter = reset
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -139,10 +170,19 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("/edit", h.requireAuth(http.HandlerFunc(h.edit)))
 	mux.Handle("/history", h.optionalAuth(http.HandlerFunc(h.history)))
 	mux.Handle("/help", h.optionalAuth(http.HandlerFunc(h.help)))
+	mux.Handle("/files", h.requireAuth(http.HandlerFunc(h.filesPage)))
+	mux.Handle("/files/", h.requireAuth(http.HandlerFunc(h.filesPage)))
+	mux.Handle("/git", h.optionalAuth(http.HandlerFunc(h.gitHTTP)))
+	mux.Handle("/git/", h.optionalAuth(http.HandlerFunc(h.gitHTTP)))
 	mux.Handle("/", h.optionalAuth(http.HandlerFunc(h.wikiPage)))
 }
 
 func (h *Handler) wikiPage(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := splitFilesPath(r.URL.Path); ok {
+		h.filesPage(w, r)
+		return
+	}
+
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, h.t(r, "errors.method_not_allowed"), http.StatusMethodNotAllowed)
 		return

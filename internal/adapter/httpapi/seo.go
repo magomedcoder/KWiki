@@ -70,7 +70,7 @@ func (h *Handler) robots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	w.Header().Set("X-Robots-Tag", "noindex")
-	body := "User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /logout\nDisallow: /lang\nDisallow: /edit\nDisallow: /history\nDisallow: /users\nDisallow: /branches\nDisallow: /media\nDisallow: /account\n"
+	body := "User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /logout\nDisallow: /lang\nDisallow: /edit\nDisallow: /history\nDisallow: /users\nDisallow: /branches\nDisallow: /media\nDisallow: /account\nDisallow: /files\nDisallow: /git\n"
 	if origin := h.absolute(r, ""); origin != "" {
 		body += "\nSitemap: " + origin + "/sitemap.xml\n"
 	}

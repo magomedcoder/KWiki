@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -528,6 +529,74 @@ func (a *UserUseCase) Login(ctx context.Context, challengeToken, csrf, email, pa
 	}
 
 	return a.issue(ctx, user.ID, client, now.Add(sessionTTL))
+}
+
+func (a *UserUseCase) Authenticate(ctx context.Context, email, password, ip string) (Actor, error) {
+	now := a.clock()
+	if locked, err := a.locked(ctx, attemptKey("ip", ip), now); err != nil {
+		return Actor{}, err
+	} else if locked {
+		_, _ = a.verify(password, a.passwords.Dummy())
+		return Actor{}, domain.ErrTooManyAttempts
+	}
+
+	normalized, emailErr := domain.NormalizeEmail(email)
+	if emailErr != nil {
+		_, _ = a.verify(password, a.passwords.Dummy())
+		if _, err := a.bump(ctx, attemptKey("ip", ip), now); err != nil {
+			return Actor{}, err
+		}
+
+		return Actor{}, domain.ErrInvalidCredentials
+	}
+
+	if locked, err := a.locked(ctx, attemptKey("mail", normalized), now); err != nil {
+		return Actor{}, err
+	} else if locked {
+		_, _ = a.verify(password, a.passwords.Dummy())
+		return Actor{}, domain.ErrTooManyAttempts
+	}
+
+	user, err := a.users.FindByEmail(ctx, normalized)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return Actor{}, err
+	}
+
+	hash := a.passwords.Dummy()
+	if err == nil {
+		hash = user.PasswordHash
+	}
+
+	ok, err := a.verify(password, hash)
+	if err != nil {
+		return Actor{}, err
+	}
+
+	if user.ID == "" || !ok {
+		if _, err := a.bump(ctx, attemptKey("ip", ip), now); err != nil {
+			return Actor{}, err
+		}
+
+		if _, err := a.bump(ctx, attemptKey("mail", normalized), now); err != nil {
+			return Actor{}, err
+		}
+
+		return Actor{}, domain.ErrInvalidCredentials
+	}
+
+	if user.Blocked {
+		return Actor{}, domain.ErrBlocked
+	}
+
+	_ = a.attempts.Clear(ctx, attemptKey("ip", ip))
+	_ = a.attempts.Clear(ctx, attemptKey("mail", normalized))
+
+	return Actor{
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  strings.TrimSpace(user.FirstName + " " + user.LastName),
+		Admin: user.Admin,
+	}, nil
 }
 
 func (a *UserUseCase) Resume(ctx context.Context, token, client string) (Actor, error) {

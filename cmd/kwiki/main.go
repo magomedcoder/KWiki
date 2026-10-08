@@ -94,6 +94,7 @@ func main() {
 	}
 
 	handler := httpapi.New(wiki, auth, views, *secure, home, bundle)
+	handler.SetGit(&git.HTTPBackend{Store: content}, content)
 	mux := http.NewServeMux()
 	handler.Register(mux)
 

@@ -32,6 +32,7 @@ type Renderer struct {
 	notFound *template.Template
 	history  *template.Template
 	help     *template.Template
+	files    *template.Template
 }
 
 type shell struct {
@@ -42,6 +43,7 @@ type shell struct {
 	CSRF        string
 	Home        string
 	NewHref     string
+	FilesHref   string
 	Indexable   bool
 	Canonical   string
 	Description string
@@ -191,6 +193,10 @@ func loadFS(fsys fs.FS, bundle *i18n.Bundle) (*Renderer, error) {
 		return nil, err
 	}
 
+	if r.files, err = r.parsePage(fsys, "files.tmpl"); err != nil {
+		return nil, err
+	}
+
 	return r, nil
 }
 
@@ -205,6 +211,7 @@ func (r *Renderer) actorShell(title string, actor usecase.Actor, lang string) sh
 		CSRF:       actor.CSRF,
 		Home:       "/",
 		NewHref:    "/edit",
+		FilesHref:  domain.FilesBrowsePath(domain.DefaultBranch, ""),
 		Lang:       lang,
 		Locale:     r.bundle.Locale(lang),
 		Languages:  r.bundle.Languages(),
@@ -220,6 +227,7 @@ func (r *Renderer) Index(w http.ResponseWriter, view usecase.IndexView, actor us
 	if view.Branch != "" {
 		frame.Home = domain.PagePath(view.Branch, "")
 		frame.NewHref = domain.EditPath(view.Branch, "")
+		frame.FilesHref = domain.FilesBrowsePath(view.Branch, "")
 	}
 	r.exec(w, r.index, indexData{
 		shell:    frame,
@@ -250,6 +258,7 @@ func (r *Renderer) Page(w http.ResponseWriter, view usecase.PageScreen, actor us
 	frame.Description = view.Description
 	frame.Home = domain.PagePath(view.Branch, "")
 	frame.NewHref = domain.EditPath(view.Branch, "")
+	frame.FilesHref = domain.FilesBrowsePath(view.Branch, "")
 	frame.Headings = headings
 	if !view.UpdatedAt.IsZero() {
 		frame.Modified = view.UpdatedAt.UTC().Format(time.RFC3339)
@@ -272,6 +281,7 @@ func (r *Renderer) History(w http.ResponseWriter, view usecase.PageScreen, actor
 	frame := r.actorShell(r.bundle.T(lang, "page.history_title", view.Title), actor, lang)
 	frame.Home = domain.PagePath(view.Branch, "")
 	frame.NewHref = domain.EditPath(view.Branch, "")
+	frame.FilesHref = domain.FilesBrowsePath(view.Branch, "")
 	r.exec(w, r.history, historyData{
 		shell:     frame,
 		Revisions: view.Revisions,
@@ -303,6 +313,7 @@ func (r *Renderer) Edit(w http.ResponseWriter, form usecase.EditForm, branches [
 	frame := r.actorShell(title, actor, lang)
 	frame.Home = domain.PagePath(form.Branch, "")
 	frame.NewHref = domain.EditPath(form.Branch, "")
+	frame.FilesHref = domain.FilesBrowsePath(form.Branch, "")
 	cancel := domain.PagePath(form.Branch, "")
 	if form.Slug != "" {
 		cancel = domain.PagePath(form.Branch, form.Slug)
@@ -348,6 +359,38 @@ func (r *Renderer) Branches(w http.ResponseWriter, page usecase.BranchesPage, ac
 	}{
 		shell:        r.actorShell(r.bundle.T(lang, "branches.title"), actor, lang),
 		BranchesPage: page,
+	}, lang)
+}
+
+func (r *Renderer) Files(w http.ResponseWriter, view usecase.FilesBrowse, actor usecase.Actor, lang string) {
+	title := r.bundle.T(lang, "files.title")
+	if view.Path != "" {
+		title = view.Path
+	}
+
+	frame := r.actorShell(title, actor, lang)
+	frame.Home = domain.PagePath(view.Branch, "")
+	frame.NewHref = domain.EditPath(view.Branch, "")
+	frame.FilesHref = domain.FilesBrowsePath(view.Branch, "")
+	rawHref := domain.FilesBrowsePath(view.Branch, view.Path)
+	if view.Path != "" {
+		rawHref += "?raw=1"
+	}
+
+	r.exec(w, r.files, struct {
+		shell
+		usecase.FilesBrowse
+		Title       string
+		FilesRoot   string
+		CurrentHref string
+		RawHref     string
+	}{
+		shell:       frame,
+		FilesBrowse: view,
+		Title:       title,
+		FilesRoot:   domain.FilesBrowsePath(view.Branch, ""),
+		CurrentHref: domain.FilesBrowsePath(view.Branch, view.Path),
+		RawHref:     rawHref,
 	}, lang)
 }
 

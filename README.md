@@ -14,14 +14,14 @@ chmod +x kwiki
 ./kwiki -data ./data -addr :8000 -pepper 'long-secret' -secure
 ```
 
-| Flag      | Default      | Purpose                                                                  |
-|-----------|--------------|--------------------------------------------------------------------------|
-| `-data`   | `./data`     | main storage                                                             |
-| `-addr`   | `:8000`      | HTTP address                                                             |
-| `-pepper` | empty        | password hash secret, same as for `user add` and `user passwd`           |
-| `-secure` | off          | secure cookie and strict transport header; requires HTTPS                |
-| `-home`   | `README.md`  | branch root page                                                         |
-| `-lang`   | `ru`         | default UI language (`ru`, `en`)                                         |
+| Flag      | Default     | Purpose                                                        |
+|-----------|-------------|----------------------------------------------------------------|
+| `-data`   | `./data`    | main storage                                                   |
+| `-addr`   | `:8000`     | HTTP address                                                   |
+| `-pepper` | empty       | password hash secret, same as for `user add` and `user passwd` |
+| `-secure` | off         | secure cookie and strict transport header; requires HTTPS      |
+| `-home`   | `README.md` | branch root page                                               |
+| `-lang`   | `ru`        | default UI language (`ru`, `en`)                               |
 
 
 ## Users
@@ -80,3 +80,18 @@ go build -o build/kwiki ./cmd/kwiki
 ```
 
 `yarn build:css` must run before `go build`
+
+---
+
+## Files and Git
+
+Browse and edit files at `/files` (or `/b/{branch}/files`). Max file size 2 MiB.
+
+Wiki branches are folders in the repo (`main/`, `docs/`, ...). Clone and push via `/git` with HTTP Basic (email and password):
+
+```bash
+git clone http://127.0.0.1:8000/git
+cd git
+git add -A && git commit -m "update"
+git push origin HEAD
+```

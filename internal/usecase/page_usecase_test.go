@@ -303,6 +303,197 @@ func (m *memContent) ListMarkdown(_ context.Context, branch string) ([]domain.Co
 	return out, nil
 }
 
+func (m *memContent) ListDir(ctx context.Context, branch, prefix string) ([]domain.DirEntry, error) {
+	files, err := m.ListPrefix(ctx, branch, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	prefix, err = domain.NormalizeRepoPath(prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]domain.DirEntry{}
+	prefixSlash := ""
+	if prefix != "" {
+		prefixSlash = prefix + "/"
+	}
+
+	for _, file := range files {
+		rel := file.Path
+		if prefixSlash != "" {
+			if !strings.HasPrefix(rel, prefixSlash) {
+				continue
+			}
+
+			rel = strings.TrimPrefix(rel, prefixSlash)
+		}
+
+		name, rest, _ := strings.Cut(rel, "/")
+		if name == "" {
+			continue
+		}
+
+		child := name
+		if prefix != "" {
+			child = prefix + "/" + name
+		}
+
+		if rest != "" {
+			seen[name] = domain.DirEntry{
+				Name: name,
+				Path: child,
+				Kind: domain.EntryDir,
+			}
+			continue
+		}
+
+		seen[name] = domain.DirEntry{
+			Name: name,
+			Path: child,
+			Kind: domain.EntryFile,
+			Size: file.Size,
+			Hash: file.Hash,
+		}
+	}
+	out := make([]domain.DirEntry, 0, len(seen))
+	for _, e := range seen {
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (m *memContent) Stat(ctx context.Context, branch, path string) (domain.DirEntry, error) {
+	path, err := domain.NormalizeRepoPath(path)
+	if err != nil {
+		return domain.DirEntry{}, err
+	}
+
+	if path == "" {
+		return domain.DirEntry{
+			Kind: domain.EntryDir,
+			Name: branch,
+		}, nil
+	}
+
+	if data, ok := m.files[contentKey(branch, path)]; ok {
+		return domain.DirEntry{
+			Name: domain.BaseName(path),
+			Path: path,
+			Kind: domain.EntryFile,
+			Size: int64(len(data)),
+		}, nil
+	}
+
+	entries, err := m.ListDir(ctx, branch, path)
+	if err != nil {
+		return domain.DirEntry{}, err
+	}
+
+	if len(entries) == 0 {
+		prefixFiles, err := m.ListPrefix(ctx, branch, path+"/")
+		if err != nil {
+			return domain.DirEntry{}, err
+		}
+
+		if len(prefixFiles) == 0 {
+			return domain.DirEntry{}, domain.ErrNotFound
+		}
+	}
+
+	return domain.DirEntry{
+		Name: domain.BaseName(path),
+		Path: path,
+		Kind: domain.EntryDir,
+	}, nil
+}
+
+func (m *memContent) DeletePath(ctx context.Context, branch, path, message string) error {
+	entry, err := m.Stat(ctx, branch, path)
+	if err != nil {
+		return err
+	}
+
+	var changes []domain.ContentChange
+	if entry.Kind == domain.EntryFile {
+		changes = []domain.ContentChange{
+			{
+				Path:   path,
+				Delete: true,
+			},
+		}
+	} else {
+		files, err := m.ListPrefix(ctx, branch, path+"/")
+		if err != nil {
+			return err
+		}
+
+		for _, f := range files {
+			changes = append(changes, domain.ContentChange{
+				Path:   f.Path,
+				Delete: true,
+			})
+		}
+	}
+
+	return m.WriteBatch(ctx, branch, changes, message)
+}
+
+func (m *memContent) MovePath(ctx context.Context, branch, from, to, message string) error {
+	entry, err := m.Stat(ctx, branch, from)
+	if err != nil {
+		return err
+	}
+
+	if _, err := m.Stat(ctx, branch, to); err == nil {
+		return domain.ErrPathExists
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+
+	var changes []domain.ContentChange
+	if entry.Kind == domain.EntryFile {
+		data, err := m.Read(ctx, branch, from)
+		if err != nil {
+			return err
+		}
+
+		changes = []domain.ContentChange{
+			{
+				Path: to,
+				Data: data,
+			},
+			{
+				Path:   from,
+				Delete: true,
+			},
+		}
+	} else {
+		files, err := m.ListPrefix(ctx, branch, from+"/")
+		if err != nil {
+			return err
+		}
+
+		for _, f := range files {
+			data, err := m.Read(ctx, branch, f.Path)
+			if err != nil {
+				return err
+			}
+			dest := to + strings.TrimPrefix(f.Path, from)
+			changes = append(changes, domain.ContentChange{
+				Path: dest,
+				Data: data,
+			}, domain.ContentChange{
+				Path:   f.Path,
+				Delete: true,
+			})
+		}
+	}
+
+	return m.WriteBatch(ctx, branch, changes, message)
+}
+
 func (m *memContent) ListPrefix(_ context.Context, branch, prefix string) ([]domain.ContentFile, error) {
 	prefixKey := branch + "\x00"
 	var out []domain.ContentFile

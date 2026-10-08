@@ -212,6 +212,48 @@ func (stubWiki) Sitemap(context.Context) ([]usecase.SitemapEntry, error) {
 	return []usecase.SitemapEntry{{Path: "/b/docs"}, {Path: "/b/docs/intro"}}, nil
 }
 
+func (stubWiki) BrowseFiles(_ context.Context, branch, path string, canEdit bool) (usecase.FilesBrowse, error) {
+	return usecase.FilesBrowse{
+		Branch:  branch,
+		Path:    path,
+		IsDir:   true,
+		CanEdit: canEdit,
+		Entries: []usecase.FileItemView{{
+			DirEntry: domain.DirEntry{
+				Name: "README.md",
+				Path: "README.md",
+				Kind: domain.EntryFile,
+				Size: 12,
+			},
+			Href:     domain.FilesBrowsePath(branch, "README.md"),
+			Icon:     "md",
+			SizeText: "12 B",
+		}},
+	}, nil
+}
+
+func (stubWiki) CreateFile(context.Context, string, string, []byte, bool, usecase.Actor) error {
+	return nil
+}
+
+func (stubWiki) UploadFile(context.Context, string, string, string, []byte, bool, usecase.Actor) (domain.DirEntry, error) {
+	return domain.DirEntry{}, nil
+}
+
+func (stubWiki) DeleteFilePath(context.Context, string, string, usecase.Actor) error {
+	return nil
+}
+
+func (stubWiki) MoveFilePath(context.Context, string, string, string, usecase.Actor) error {
+	return nil
+}
+
+func (stubWiki) ReadFileBytes(context.Context, string, string) ([]byte, string, error) {
+	return []byte("# hi"), "text/plain; charset=utf-8", nil
+}
+
+func (stubWiki) Sync(context.Context) error { return nil }
+
 type stubAuth struct {
 	actor  usecase.Actor
 	begin  usecase.IssuedSession
@@ -224,6 +266,14 @@ func (s *stubAuth) BeginLogin(context.Context, string, string) (usecase.IssuedSe
 
 func (s *stubAuth) Login(context.Context, string, string, string, string, string, string) (usecase.IssuedSession, error) {
 	return s.issued, nil
+}
+
+func (s *stubAuth) Authenticate(context.Context, string, string, string) (usecase.Actor, error) {
+	if s.actor.Email == "" {
+		return usecase.Actor{}, domain.ErrUnauthenticated
+	}
+
+	return s.actor, nil
 }
 
 func (s *stubAuth) Resume(context.Context, string, string) (usecase.Actor, error) {
@@ -301,6 +351,11 @@ func (s *stubView) Login(_ http.ResponseWriter, page usecase.LoginPage, _ string
 
 func (stubView) Help(w http.ResponseWriter, _ usecase.Actor, _ string) {
 	w.WriteHeader(http.StatusOK)
+}
+
+func (stubView) Files(w http.ResponseWriter, _ usecase.FilesBrowse, _ usecase.Actor, _ string) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("files-ok"))
 }
 
 func testBundle(t *testing.T) *i18n.Bundle {

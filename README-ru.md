@@ -80,3 +80,18 @@ go build -o build/kwiki ./cmd/kwiki
 ```
 
 `yarn build:css` нужен до `go build`
+
+---
+
+## Файлы и Git
+
+Файлы - `/files` (или `/b/{branch}/files`). Лимит размера 2 МБ.
+
+Ветки вики - папки в репозитории (`main/`, `docs/`, ...). Clone и push через `/git` с HTTP Basic (почта и пароль):
+
+```bash
+git clone http://127.0.0.1:8000/git
+cd git
+git add -A && git commit -m "правка"
+git push origin HEAD
+```

@@ -33,13 +33,21 @@ type ContentRepository interface {
 
 	ListPrefix(ctx context.Context, branch, prefix string) ([]ContentFile, error)
 
+	ListDir(ctx context.Context, branch, prefix string) ([]DirEntry, error)
+
 	Exists(ctx context.Context, branch, path string) (bool, error)
+
+	Stat(ctx context.Context, branch, path string) (DirEntry, error)
 
 	Read(ctx context.Context, branch, path string) ([]byte, error)
 
 	Write(ctx context.Context, branch, path string, content []byte, message string) error
 
 	WriteBatch(ctx context.Context, branch string, changes []ContentChange, message string) error
+
+	DeletePath(ctx context.Context, branch, path string, message string) error
+
+	MovePath(ctx context.Context, branch, from, to string, message string) error
 
 	RemoveBranch(ctx context.Context, branch string) error
 

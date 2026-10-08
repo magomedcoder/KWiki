@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -47,7 +48,60 @@ func NewLocal(path string) (*Store, error) {
 		return nil, err
 	}
 
+	if err := configureReceive(repo); err != nil {
+		return nil, err
+	}
+
 	return &Store{repo: repo, root: abs}, nil
+}
+
+func configureReceive(repo *git.Repository) error {
+	cfg, err := repo.Config()
+	if err != nil {
+		return err
+	}
+
+	changed := false
+	if cfg.Raw.Section("http").Option("receivepack") != "true" {
+		cfg.Raw.Section("http").SetOption("receivepack", "true")
+		changed = true
+	}
+
+	if cfg.Raw.Section("receive").Option("denyCurrentBranch") != "updateInstead" {
+		cfg.Raw.Section("receive").SetOption("denyCurrentBranch", "updateInstead")
+		changed = true
+	}
+
+	if cfg.Raw.Section("receive").Option("denyNonFastForwards") != "true" {
+		cfg.Raw.Section("receive").SetOption("denyNonFastForwards", "true")
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	return repo.Storer.SetConfig(cfg)
+}
+
+func (s *Store) Root() string {
+	return s.root
+}
+
+func (s *Store) Repository() *git.Repository {
+	return s.repo
+}
+
+func (s *Store) ResetWorktree() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	wt, err := s.repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	return wt.Reset(&git.ResetOptions{Mode: git.HardReset})
 }
 
 func ensureInitialCommit(repo *git.Repository, root string) error {
@@ -145,6 +199,142 @@ func (s *Store) ListPrefix(ctx context.Context, branch, prefix string) ([]domain
 	return files, err
 }
 
+func (s *Store) ListDir(ctx context.Context, branch, prefix string) ([]domain.DirEntry, error) {
+	prefix, err := domain.NormalizeRepoPath(prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	files, err := s.ListPrefix(ctx, branch, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	type agg struct {
+		entry domain.DirEntry
+		seen  bool
+	}
+	children := map[string]*agg{}
+	prefixSlash := ""
+	if prefix != "" {
+		prefixSlash = prefix + "/"
+	}
+
+	for _, file := range files {
+		rel := file.Path
+		if prefixSlash != "" {
+			if !strings.HasPrefix(rel, prefixSlash) {
+				continue
+			}
+			rel = strings.TrimPrefix(rel, prefixSlash)
+		}
+		if rel == "" {
+			continue
+		}
+
+		name, _, hasRest := strings.Cut(rel, "/")
+		if name == "" || domain.IsHiddenRepoName(name) {
+			continue
+		}
+
+		childPath := name
+		if prefix != "" {
+			childPath = prefix + "/" + name
+		}
+
+		if hasRest {
+			item, ok := children[name]
+			if !ok {
+				children[name] = &agg{entry: domain.DirEntry{
+					Name: name,
+					Path: childPath,
+					Kind: domain.EntryDir,
+				}}
+				continue
+			}
+			if item.entry.Kind != domain.EntryDir {
+				item.entry.Kind = domain.EntryDir
+				item.entry.Size = 0
+				item.entry.Hash = ""
+			}
+			continue
+		}
+
+		children[name] = &agg{entry: domain.DirEntry{
+			Name: name,
+			Path: childPath,
+			Kind: domain.EntryFile,
+			Size: file.Size,
+			Hash: file.Hash,
+		}, seen: true}
+	}
+
+	out := make([]domain.DirEntry, 0, len(children))
+	for _, item := range children {
+		out = append(out, item.entry)
+	}
+	sortDirEntries(out)
+	return out, nil
+}
+
+func sortDirEntries(entries []domain.DirEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Kind != entries[j].Kind {
+			return entries[i].Kind == domain.EntryDir
+		}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+}
+
+func (s *Store) Stat(ctx context.Context, branch, path string) (domain.DirEntry, error) {
+	path, err := domain.NormalizeRepoPath(path)
+	if err != nil || path == "" {
+		if err != nil {
+			return domain.DirEntry{}, err
+		}
+		return domain.DirEntry{
+			Path: "",
+			Kind: domain.EntryDir,
+			Name: branch,
+		}, nil
+	}
+
+	data, err := s.Read(ctx, branch, path)
+	if err == nil {
+		return domain.DirEntry{
+			Name: domain.BaseName(path),
+			Path: path,
+			Kind: domain.EntryFile,
+			Size: int64(len(data)),
+		}, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return domain.DirEntry{}, err
+	}
+
+	children, err := s.ListDir(ctx, branch, path)
+	if err != nil {
+		return domain.DirEntry{}, err
+	}
+
+	if len(children) == 0 {
+		prefixFiles, err := s.ListPrefix(ctx, branch, path+"/")
+		if err != nil {
+			return domain.DirEntry{}, err
+		}
+
+		if len(prefixFiles) == 0 {
+			return domain.DirEntry{}, domain.ErrNotFound
+		}
+	}
+
+	return domain.DirEntry{
+		Name: domain.BaseName(path),
+		Path: path,
+		Kind: domain.EntryDir,
+	}, nil
+}
+
 func (s *Store) Exists(ctx context.Context, branch, path string) (bool, error) {
 	_, err := s.Read(ctx, branch, path)
 	if errors.Is(err, domain.ErrNotFound) {
@@ -223,6 +413,104 @@ func (s *Store) WriteBatch(ctx context.Context, branch string, changes []domain.
 	}
 
 	return s.commit(wt, message)
+}
+
+func (s *Store) DeletePath(ctx context.Context, branch, path, message string) error {
+	path, err := domain.NormalizeRepoPath(path)
+	if err != nil || path == "" {
+		if err != nil {
+			return err
+		}
+		return domain.ErrInvalidPath
+	}
+
+	entry, err := s.Stat(ctx, branch, path)
+	if err != nil {
+		return err
+	}
+
+	var changes []domain.ContentChange
+	if entry.Kind == domain.EntryFile {
+		changes = []domain.ContentChange{{Path: path, Delete: true}}
+	} else {
+		files, err := s.ListPrefix(ctx, branch, path+"/")
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			changes = append(changes, domain.ContentChange{Path: file.Path, Delete: true})
+		}
+		if len(changes) == 0 {
+			return domain.ErrNotFound
+		}
+	}
+	return s.WriteBatch(ctx, branch, changes, message)
+}
+
+func (s *Store) MovePath(ctx context.Context, branch, from, to, message string) error {
+	from, err := domain.NormalizeRepoPath(from)
+	if err != nil || from == "" {
+		if err != nil {
+			return err
+		}
+		return domain.ErrInvalidPath
+	}
+	to, err = domain.NormalizeRepoPath(to)
+	if err != nil || to == "" {
+		if err != nil {
+			return err
+		}
+		return domain.ErrInvalidPath
+	}
+	if from == to {
+		return nil
+	}
+	if strings.HasPrefix(to+"/", from+"/") {
+		return domain.ErrInvalidPath
+	}
+
+	entry, err := s.Stat(ctx, branch, from)
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.Stat(ctx, branch, to); err == nil {
+		return domain.ErrPathExists
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+
+	var changes []domain.ContentChange
+	if entry.Kind == domain.EntryFile {
+		data, err := s.Read(ctx, branch, from)
+		if err != nil {
+			return err
+		}
+		changes = []domain.ContentChange{
+			{Path: to, Data: data},
+			{Path: from, Delete: true},
+		}
+	} else {
+		files, err := s.ListPrefix(ctx, branch, from+"/")
+		if err != nil {
+			return err
+		}
+		if len(files) == 0 {
+			return domain.ErrNotFound
+		}
+		for _, file := range files {
+			data, err := s.Read(ctx, branch, file.Path)
+			if err != nil {
+				return err
+			}
+			dest := to + strings.TrimPrefix(file.Path, from)
+			changes = append(changes,
+				domain.ContentChange{Path: dest, Data: data},
+				domain.ContentChange{Path: file.Path, Delete: true},
+			)
+		}
+	}
+	return s.WriteBatch(ctx, branch, changes, message)
 }
 
 func (s *Store) RemoveBranch(ctx context.Context, branch string) error {

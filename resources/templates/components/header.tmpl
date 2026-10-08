@@ -7,6 +7,7 @@
     {{if .Email}}
     <nav class="ms-auto flex max-w-full flex-wrap items-center justify-end gap-x-3.5 gap-y-1 text-sm" aria-label="{{ t .Lang "nav.pages" }}">
         <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.Home}}">{{ t .Lang "nav.pages" }}</a>
+        <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.FilesHref}}">{{ t .Lang "nav.files" }}</a>
         <a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="{{.NewHref}}">{{ t .Lang "nav.new_page" }}</a>
         {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/branches">{{ t .Lang "nav.branches" }}</a>{{end}}
         {{if .Admin}}<a class="text-wiki-ink no-underline hover:underline hover:underline-offset-2" href="/users">{{ t .Lang "nav.users" }}</a>{{end}}
